@@ -69,7 +69,7 @@ private func identified(_ f: Fixture, name: String, ext: String, id: String, ver
     _ = try identified(f, name: "Original", ext: "vst3", id: "org.maker.original", vstType: "Instrument")
     items = f.scan()
     #expect(items.first { $0.path == aax.path }?.categories == [.instrument])
-    #expect(items.first { $0.path == aax.path }?.classificationSource == "关联其他格式 · VST3")
+    #expect(items.first { $0.path == aax.path }?.classificationSource == L("关联其他格式 · ") + "VST3")
 }
 
 @Test func explicitFormatAliasesLinkMelodyneAndCatalogWorksWithoutDonor() throws {
@@ -100,7 +100,7 @@ private func identified(_ f: Fixture, name: String, ext: String, id: String, ver
     let aax = try identified(f, name: "Conflict", ext: "aaxplugin", id: "org.maker.conflict")
     let item = try #require(f.scan().first { $0.path == aax.path })
     #expect(item.categories == [.unknown])
-    #expect(item.classificationSource.contains("冲突"))
+    #expect(item.classificationSource == L("分类依据冲突 · 待确认"))
     #expect(item.classification?.evidence?.count == 2)
     _ = try identified(f, name: "Melodyne", ext: "component", id: "com.celemony.melodyne.au", version: "5.4.2", auTypes: ["aumu"])
     let other = try identified(f, name: "Melodyne", ext: "aaxplugin", id: "com.celemony.melodyne.aax", version: "5.4.2")

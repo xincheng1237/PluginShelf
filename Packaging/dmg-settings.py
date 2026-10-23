@@ -30,8 +30,9 @@ icon = str(application / "Contents/Resources/AppIcon.icns")
 background = defines["background"]
 format = "UDZO"
 filesystem = "HFS+"
-# Leave room for Finder's optional tab, path and status bars. Current macOS may
-# retain those user preferences even with the folder-specific flags below.
+# Keep enough height when Finder applies the user's bar preferences.
+# The flags below are defaults, not a guarantee that Finder hides every bar;
+# changing global Finder preferences is deliberately outside this packaging step.
 window_rect = ((180, 140), (640, 480))
 default_view = "icon-view"
 show_status_bar = False

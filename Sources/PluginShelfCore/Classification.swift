@@ -3,6 +3,7 @@ import Foundation
 public enum PluginCategory: String, Codable, CaseIterable, Sendable, Identifiable {
     case effect = "效果器", instrument = "虚拟乐器", other = "其他", unknown = "未识别"
     public var id: String { rawValue }
+    public var displayName: String { L10n.text(rawValue) }
     public var route: String { "category:" + rawValue }
     public var symbol: String {
         switch self { case .effect: "slider.horizontal.3"; case .instrument: "pianokeys"; case .other: "wrench.and.screwdriver"; case .unknown: "questionmark.folder" }
@@ -75,9 +76,9 @@ public enum PluginClassifier {
             default: category = .unknown
             }
             let identifier = [type, entry["subtype"] as? String ?? "", entry["manufacturer"] as? String ?? "", String(index)].joined(separator: ":")
-            return PluginComponent(identifier: identifier, name: entry["name"] as? String ?? "组件 \(index + 1)", categories: [category], declaration: type.isEmpty ? "未声明组件类型" : type)
+            return PluginComponent(identifier: identifier, name: entry["name"] as? String ?? L("组件 \(index + 1)"), categories: [category], declaration: type.isEmpty ? L("未声明组件类型") : type)
         }
-        return PluginClassification(components: components, source: "插件声明 · AudioComponents")
+        return PluginClassification(components: components, source: L("插件声明 · AudioComponents"))
     }
     private struct ModuleInfo: Decodable {
         let classes: [ModuleClass]
@@ -102,9 +103,9 @@ public enum PluginClassifier {
                 if tags.contains("Fx") { categories.append(.effect) }
                 if tags.contains("Instrument") { categories.append(.instrument) }
                 if categories.isEmpty, tags.contains(where: { ["Analyzer", "Generator", "Tools", "Note Effect"].contains($0) }) { categories = [.other] }
-                return PluginComponent(identifier: item.cid ?? String(index), name: item.name ?? "组件 \(index + 1)", categories: PluginCategory.normalized(categories), declaration: tags.isEmpty ? "未声明子类别" : tags.joined(separator: " | "))
+                return PluginComponent(identifier: item.cid ?? String(index), name: item.name ?? L("组件 \(index + 1)"), categories: PluginCategory.normalized(categories), declaration: tags.isEmpty ? L("未声明子类别") : tags.joined(separator: " | "))
             }
-            if !components.isEmpty { return PluginClassification(components: components, source: "插件声明 · moduleinfo.json") }
+            if !components.isEmpty { return PluginClassification(components: components, source: L("插件声明 · moduleinfo.json")) }
         }
         return nil
     }

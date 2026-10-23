@@ -1,3 +1,4 @@
+import PluginShelfCore
 import AppKit
 import SwiftUI
 import QuartzCore
@@ -14,9 +15,10 @@ final class SidebarAnimationController: NSObject {
     func updateButton(visible: Bool, onToggle: @escaping @MainActor (Bool) -> Void) {
         self.onToggle = onToggle
         button.state = visible ? .on : .off
-        button.toolTip = visible ? "隐藏边栏" : "显示边栏"
+        button.setAccessibilityLabel(L("边栏"))
+        button.toolTip = visible ? L("隐藏边栏") : L("显示边栏")
         button.setAccessibilityValue(visible ? 1 : 0)
-        button.setAccessibilityHelp(visible ? "隐藏边栏，当前已展开" : "显示边栏，当前已收起")
+        button.setAccessibilityHelp(visible ? L("隐藏边栏，当前已展开") : L("显示边栏，当前已收起"))
         attachButtonIfNeeded()
     }
 
@@ -28,11 +30,11 @@ final class SidebarAnimationController: NSObject {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 44, height: 38))
         button.setButtonType(.pushOnPushOff)
         button.bezelStyle = .texturedRounded
-        button.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "边栏")
+        button.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: L("边栏"))
         button.imagePosition = .imageOnly
         button.target = self
         button.action = #selector(toggleSidebar(_:))
-        button.setAccessibilityLabel("边栏")
+        button.setAccessibilityLabel(L("边栏"))
         button.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(button)
         NSLayoutConstraint.activate([

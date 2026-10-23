@@ -9,13 +9,13 @@ public enum PluginScanner {
             guard !root.url.resolvingSymlinksInPath().path.hasPrefix("/System/") else { continue }
             guard fm.fileExists(atPath: root.path) else { continue }
             report.checkedRoots += 1
-            guard fm.isReadableFile(atPath: root.path) else { report.warnings.append("无权读取：\(root.path)"); continue }
+            guard fm.isReadableFile(atPath: root.path) else { report.warnings.append(L("无权读取：\(root.path)")); continue }
             var enumerationErrors: [String] = []
             let enumerator = fm.enumerator(at: root.url, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles], errorHandler: { url, error in
                 enumerationErrors.append("\(url.path)：\(error.localizedDescription)")
                 return true
             })
-            guard let enumerator else { report.warnings.append("无法扫描：\(root.path)"); continue }
+            guard let enumerator else { report.warnings.append(L("无法扫描：\(root.path)")); continue }
             for case let url as URL in enumerator {
                 if let format = PluginFormat.detect(url) {
                     enumerator.skipDescendants()
@@ -41,7 +41,7 @@ public enum PluginScanner {
                     for url in extensions where url.pathExtension == "appex" {
                         guard !isBuiltIn(url) else { continue }
                         guard let data = try? Data(contentsOf: url.appendingPathComponent("Contents/Info.plist")), let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any], let ext = info["NSExtension"] as? [String: Any], let point = ext["NSExtensionPointIdentifier"] as? String, point.hasPrefix("com.apple.AudioUnit"), seen.insert(url.path).inserted else { continue }
-                        let root = ScanRoot(path: appRoot.path, title: "应用内扩展", protected: true)
+                        let root = ScanRoot(path: appRoot.path, title: L("应用内扩展"), protected: true)
                         report.plugins.append(makePlugin(url: url, format: .auv3, root: root, firstSeen: firstSeen, now: now))
                     }
                 }
@@ -68,11 +68,11 @@ public enum PluginScanner {
         let name = info["CFBundleDisplayName"] as? String ?? info["CFBundleName"] as? String ?? url.deletingPathExtension().lastPathComponent
         let vendor: String
         if let auName, auName.contains(":") { vendor = String(auName.split(separator: ":", maxSplits: 1)[0]) }
-        else { vendor = info["CFBundleGetInfoString"] as? String ?? (bundleID.split(separator: ".").dropFirst().first.map(String.init) ?? "未知厂商") }
+        else { vendor = info["CFBundleGetInfoString"] as? String ?? (bundleID.split(separator: ".").dropFirst().first.map(String.init) ?? L("未知厂商")) }
         let restriction: String?
-        if format == .auv3 { restriction = "由宿主应用管理，请使用原安装器或卸载所属应用。" }
-        else if root.protected { restriction = "macOS 系统组件，仅供查看。" }
-        else if values?.isSymbolicLink == true { restriction = "符号链接，仅供查看。" }
+        if format == .auv3 { restriction = L("由宿主应用管理，请使用原安装器或卸载所属应用。") }
+        else if root.protected { restriction = L("macOS 系统组件，仅供查看。") }
+        else if values?.isSymbolicLink == true { restriction = L("符号链接，仅供查看。") }
         else { restriction = nil }
         var plugin = Plugin(path: url.standardizedFileURL.path, name: name, format: format, vendor: vendor, version: info["CFBundleShortVersionString"] as? String ?? info["CFBundleVersion"] as? String ?? "—", bundleID: bundleID, root: root, addedAt: values?.addedToDirectoryDate ?? values?.creationDate ?? firstSeen[url.path] ?? now, firstSeenAt: firstSeen[url.path] ?? now, bytes: FileSafety.size(url), restriction: restriction)
         plugin.classification = PluginClassifier.classify(url: url, format: format, info: info)

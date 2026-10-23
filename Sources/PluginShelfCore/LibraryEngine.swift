@@ -13,7 +13,7 @@ public actor LibraryEngine {
     private func prepare() throws {
         for directory in [vault, journals] {
             try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            guard try directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw ShelfError.invalid("废纸篓记录目录不能是符号链接。") }
+            guard try directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw ShelfError.invalid(L("废纸篓记录目录不能是符号链接。")) }
         }
     }
     public func scan(roots: [ScanRoot], applications: [URL]) throws -> ScanReport {
@@ -26,7 +26,7 @@ public actor LibraryEngine {
         do { overrides = try readCategoryOverrides() }
         catch {
             overrides = [:]
-            report.warnings.append("手动分类记录无法读取，暂时显示自动识别结果；原记录未覆盖：\(error.localizedDescription)")
+            report.warnings.append(L("手动分类记录无法读取，暂时显示自动识别结果；原记录未覆盖：\(error.localizedDescription)"))
         }
         for index in report.plugins.indices {
             let plugin = report.plugins[index]
@@ -54,11 +54,11 @@ public actor LibraryEngine {
         try FileSafety.writeJSON(values, to: categoriesURL)
     }
     public func export(_ plugins: [Plugin], to destination: URL, roots: [ScanRoot]) throws -> BackupManifest {
-        guard !plugins.isEmpty else { throw ShelfError.invalid("请先选择要备份的插件。") }
-        guard !fm.fileExists(atPath: destination.path) else { throw ShelfError.invalid("备份位置已存在，请使用新的名称。") }
+        guard !plugins.isEmpty else { throw ShelfError.invalid(L("请先选择要备份的插件。")) }
+        guard !fm.fileExists(atPath: destination.path) else { throw ShelfError.invalid(L("备份位置已存在，请使用新的名称。")) }
         for plugin in plugins {
             try FileSafety.validatePlugin(plugin, roots: roots)
-            guard !FileSafety.contained(destination, in: plugin.url), destination != plugin.url else { throw ShelfError.invalid("备份不能保存在插件内部。") }
+            guard !FileSafety.contained(destination, in: plugin.url), destination != plugin.url else { throw ShelfError.invalid(L("备份不能保存在插件内部。")) }
         }
         let staging = destination.deletingLastPathComponent().appendingPathComponent(".PluginShelf-export-" + UUID().uuidString)
         try fm.createDirectory(at: staging.appendingPathComponent("Payloads"), withIntermediateDirectories: true)
@@ -71,7 +71,7 @@ public actor LibraryEngine {
             try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             let hash = try FileSafety.digest(plugin.url)
             try fm.copyItem(at: plugin.url, to: target)
-            guard try FileSafety.digest(target) == hash, try FileSafety.digest(plugin.url) == hash else { throw ShelfError.invalid("\(plugin.name) 在备份期间发生变化，备份已取消。") }
+            guard try FileSafety.digest(target) == hash, try FileSafety.digest(plugin.url) == hash else { throw ShelfError.invalid(L("\(plugin.name) 在备份期间发生变化，备份已取消。")) }
             entries.append(BackupEntry(id: id, name: plugin.name, format: plugin.format, originalRoot: plugin.root.path, relativePath: try FileSafety.relative(plugin.url, to: plugin.root.url), payloadPath: payload, digest: hash, bytes: plugin.bytes))
         }
         let manifest = BackupManifest(entries: entries)
@@ -81,16 +81,16 @@ public actor LibraryEngine {
     }
     public func inspectBackup(_ folder: URL, roots: [ScanRoot]) throws -> BackupManifest {
         let manifestURL = try FileSafety.child("manifest.json", of: folder)
-        guard (try manifestURL.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0 < 10_000_000 else { throw ShelfError.invalid("备份清单过大。") }
+        guard (try manifestURL.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0 < 10_000_000 else { throw ShelfError.invalid(L("备份清单过大。")) }
         let manifest = try FileSafety.readJSON(BackupManifest.self, from: manifestURL)
-        guard manifest.product == "PluginShelf", manifest.schema == 1, !manifest.entries.isEmpty, manifest.entries.count <= 10000 else { throw ShelfError.invalid("不是受支持的 PluginShelf 备份。") }
+        guard manifest.product == "PluginShelf", manifest.schema == 1, !manifest.entries.isEmpty, manifest.entries.count <= 10000 else { throw ShelfError.invalid(L("不是受支持的 PluginShelf 备份。")) }
         var targets = Set<String>(); var ids = Set<UUID>()
         for entry in manifest.entries {
             let target = try restoreTarget(entry, roots: roots)
-            guard targets.insert(target.path).inserted, ids.insert(entry.id).inserted else { throw ShelfError.invalid("备份清单中包含重复项目。") }
+            guard targets.insert(target.path).inserted, ids.insert(entry.id).inserted else { throw ShelfError.invalid(L("备份清单中包含重复项目。")) }
             let payload = try FileSafety.child(entry.payloadPath, of: folder)
-            guard entry.payloadPath.hasPrefix("Payloads/" + entry.id.uuidString + "/"), payload.lastPathComponent == target.lastPathComponent, PluginFormat.detect(payload) == entry.format else { throw ShelfError.invalid("备份载荷与清单不匹配。") }
-            guard try FileSafety.digest(payload) == entry.digest else { throw ShelfError.invalid("\(entry.name) 校验失败：备份不完整或已被修改。") }
+            guard entry.payloadPath.hasPrefix("Payloads/" + entry.id.uuidString + "/"), payload.lastPathComponent == target.lastPathComponent, PluginFormat.detect(payload) == entry.format else { throw ShelfError.invalid(L("备份载荷与清单不匹配。")) }
+            guard try FileSafety.digest(payload) == entry.digest else { throw ShelfError.invalid(L("\(entry.name) 校验失败：备份不完整或已被修改。")) }
         }
         return manifest
     }
@@ -107,22 +107,22 @@ public actor LibraryEngine {
         return report
     }
     private func restoreTarget(_ entry: BackupEntry, roots: [ScanRoot]) throws -> URL {
-        guard let root = roots.first(where: { $0.path == entry.originalRoot && !$0.protected }), entry.format != .auv3 else { throw ShelfError.invalid("原目录未登记或受保护：\(entry.originalRoot)。请先在设置中添加原插件目录。") }
-        guard root.url.resolvingSymlinksInPath().path == root.path else { throw ShelfError.invalid("恢复目录已被替换为链接，请重新登记。") }
+        guard let root = roots.first(where: { $0.path == entry.originalRoot && !$0.protected }), entry.format != .auv3 else { throw ShelfError.invalid(L("原目录未登记或受保护：\(entry.originalRoot)。请先在设置中添加原插件目录。")) }
+        guard root.url.resolvingSymlinksInPath().path == root.path else { throw ShelfError.invalid(L("恢复目录已被替换为链接，请重新登记。")) }
         let target = try FileSafety.child(entry.relativePath, of: root.url)
-        guard PluginFormat.detect(target) == entry.format, !target.path.hasPrefix("/System/"), !target.pathComponents.dropLast().contains(where: { $0.lowercased().hasSuffix(".app") || PluginFormat.detect(URL(fileURLWithPath: $0)) != nil }) else { throw ShelfError.invalid("恢复目标不是安全的独立插件路径。") }
+        guard PluginFormat.detect(target) == entry.format, !target.path.hasPrefix("/System/"), !target.pathComponents.dropLast().contains(where: { $0.lowercased().hasSuffix(".app") || PluginFormat.detect(URL(fileURLWithPath: $0)) != nil }) else { throw ShelfError.invalid(L("恢复目标不是安全的独立插件路径。")) }
         return target
     }
     private func install(source: URL, entry: BackupEntry, roots: [ScanRoot]) throws {
         let target = try restoreTarget(entry, roots: roots)
-        guard !fm.fileExists(atPath: target.path), (try? target.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else { throw ShelfError.invalid("原位置已有同名插件，已跳过，未覆盖：\(target.path)") }
-        guard try FileSafety.digest(source) == entry.digest else { throw ShelfError.invalid("文件校验失败。") }
+        guard !fm.fileExists(atPath: target.path), (try? target.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else { throw ShelfError.invalid(L("原位置已有同名插件，已跳过，未覆盖：\(target.path)")) }
+        guard try FileSafety.digest(source) == entry.digest else { throw ShelfError.invalid(L("文件校验失败。")) }
         try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Stage on the target volume, verify, then commit without overwriting an existing path.
         let staging = target.deletingLastPathComponent().appendingPathComponent(".PluginShelf-restore-" + UUID().uuidString)
         defer { try? fm.removeItem(at: staging) }
         try fm.copyItem(at: source, to: staging)
-        guard try FileSafety.digest(staging) == entry.digest else { throw ShelfError.invalid("恢复副本校验失败，原备份保留。") }
+        guard try FileSafety.digest(staging) == entry.digest else { throw ShelfError.invalid(L("恢复副本校验失败，原备份保留。")) }
         _ = try restoreTarget(entry, roots: roots)
         try fm.moveItem(at: staging, to: target)
     }
@@ -148,7 +148,7 @@ public actor LibraryEngine {
                 try save(record, directory: directory)
                 try FileSafety.validatePlugin(plugin, roots: roots)
                 guard try FileIdentity(at: plugin.url) == record.systemTrash?.identity,
-                      try FileSafety.digest(plugin.url) == hash else { throw ShelfError.invalid("插件在操作期间发生变化，已取消。") }
+                      try FileSafety.digest(plugin.url) == hash else { throw ShelfError.invalid(L("插件在操作期间发生变化，已取消。")) }
                 let moved = try trash.moveToTrash(plugin.url)
                 record.systemTrash?.bookmark = try trash.bookmark(moved)
                 try save(record, directory: directory)
@@ -178,22 +178,22 @@ public actor LibraryEngine {
     }
     private func validatedSlot(_ record: RecoveryRecord) throws -> URL {
         let directory = try FileSafety.child(record.id.uuidString, of: record.systemTrash == nil ? vault : journals)
-        guard record.entry.id == record.id, record.entry.payloadPath == URL(fileURLWithPath: record.entry.payloadPath).lastPathComponent else { throw ShelfError.invalid("恢复记录路径异常。") }
+        guard record.entry.id == record.id, record.entry.payloadPath == URL(fileURLWithPath: record.entry.payloadPath).lastPathComponent else { throw ShelfError.invalid(L("恢复记录路径异常。")) }
         try FileSafety.safeRelative(record.entry.payloadPath)
         return directory
     }
     private func systemPayload(_ record: RecoveryRecord) throws -> URL {
-        guard let reference = record.systemTrash else { throw ShelfError.invalid("缺少系统废纸篓记录。") }
+        guard let reference = record.systemTrash else { throw ShelfError.invalid(L("缺少系统废纸篓记录。")) }
         let url = try trash.resolve(reference.bookmark)
-        guard try trash.contains(url) else { throw ShelfError.invalid("该文件已移出系统废纸篓，未对其执行操作。") }
+        guard try trash.contains(url) else { throw ShelfError.invalid(L("该文件已移出系统废纸篓，未对其执行操作。")) }
         guard try FileIdentity(at: url) == reference.identity,
-              try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid("废纸篓文件已变化，未对其执行操作。") }
+              try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid(L("废纸篓文件已变化，未对其执行操作。")) }
         return url
     }
     private func payload(_ record: RecoveryRecord) throws -> URL {
         if record.systemTrash != nil { return try systemPayload(record) }
         let url = try FileSafety.child(record.entry.payloadPath, of: validatedSlot(record))
-        guard try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid("旧版废纸篓文件校验失败。") }
+        guard try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid(L("旧版废纸篓文件校验失败。")) }
         return url
     }
     public func recoveryRecords() throws -> [RecoveryRecord] {
@@ -202,9 +202,9 @@ public actor LibraryEngine {
         let directories = try fm.contentsOfDirectory(at: vault, includingPropertiesForKeys: nil) + fm.contentsOfDirectory(at: journals, includingPropertiesForKeys: nil)
         for directory in directories where UUID(uuidString: directory.lastPathComponent) != nil {
             var record = try FileSafety.readJSON(RecoveryRecord.self, from: FileSafety.child("record.json", of: directory))
-            guard directory.lastPathComponent == record.id.uuidString else { throw ShelfError.invalid("废纸篓记录不一致。") }
+            guard directory.lastPathComponent == record.id.uuidString else { throw ShelfError.invalid(L("废纸篓记录不一致。")) }
             guard try validatedSlot(record).standardizedFileURL == directory.standardizedFileURL else {
-                throw ShelfError.invalid("删除记录的存储位置不一致。")
+                throw ShelfError.invalid(L("删除记录的存储位置不一致。"))
             }
             if record.state == .restored { continue }
             record.availability = .unavailable
@@ -236,7 +236,7 @@ public actor LibraryEngine {
                 let source = try payload(record)
                 if record.state == .restoredPendingCleanup {
                     let target = try restoreTarget(record.entry, roots: roots)
-                    guard try FileSafety.digest(target) == record.entry.digest else { throw ShelfError.invalid("已还原的文件发生变化，废纸篓副本保留。") }
+                    guard try FileSafety.digest(target) == record.entry.digest else { throw ShelfError.invalid(L("已还原的文件发生变化，废纸篓副本保留。")) }
                 } else {
                     record.state = .restoring; try save(record, directory: directory)
                     try install(source: source, entry: record.entry, roots: roots)
@@ -271,10 +271,10 @@ public actor LibraryEngine {
         var report = OperationReport()
         for record in try recoveryRecords() where ids.contains(record.id) {
             do {
-                guard record.systemTrash != nil, !record.canRecover else { throw ShelfError.invalid("仍可还原的项目不能只移除记录。") }
+                guard record.systemTrash != nil, !record.canRecover else { throw ShelfError.invalid(L("仍可还原的项目不能只移除记录。")) }
                 let directory = try validatedSlot(record)
                 let contents = try fm.contentsOfDirectory(atPath: directory.path)
-                guard contents.allSatisfy({ $0 == "record.json" }) else { throw ShelfError.invalid("记录目录内还有文件，已保留。") }
+                guard contents.allSatisfy({ $0 == "record.json" }) else { throw ShelfError.invalid(L("记录目录内还有文件，已保留。")) }
                 try fm.removeItem(at: directory)
                 report.completed.append(record.entry.name)
             } catch { report.failures.append("\(record.entry.name)：\(error.localizedDescription)") }

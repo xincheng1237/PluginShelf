@@ -21,7 +21,7 @@ public struct SystemTrash: TrashHandling {
     public func moveToTrash(_ url: URL) throws -> URL {
         var result: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &result)
-        guard let result else { throw ShelfError.invalid("系统未返回废纸篓位置；删除记录已保留，请在 Finder 中检查。") }
+        guard let result else { throw ShelfError.invalid(L("系统未返回废纸篓位置；删除记录已保留，请在 Finder 中检查。")) }
         return result as URL
     }
     public func contains(_ url: URL) throws -> Bool {
@@ -40,7 +40,7 @@ public struct FileIdentity: Codable, Sendable, Equatable {
         guard values[.type] as? FileAttributeType != .typeSymbolicLink,
               let device = values[.systemNumber] as? NSNumber,
               let inode = values[.systemFileNumber] as? NSNumber else {
-            throw ShelfError.invalid("无法确认废纸篓项目的文件身份。")
+            throw ShelfError.invalid(L("无法确认废纸篓项目的文件身份。"))
         }
         self.device = device.uint64Value; self.inode = inode.uint64Value
     }

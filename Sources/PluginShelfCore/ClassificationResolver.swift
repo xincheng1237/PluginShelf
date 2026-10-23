@@ -30,8 +30,8 @@ enum ClassificationResolver {
     }
 
     private static func evidence(for plugin: Plugin) -> ClassificationEvidence {
-        ClassificationEvidence(title: "关联 \(plugin.format.rawValue) · \(plugin.name)",
-            detail: "同产品、同版本 \(plugin.version)；依据：\(plugin.classificationSource)",
+        ClassificationEvidence(title: L("关联 \(plugin.format.rawValue) · \(plugin.name)"),
+            detail: L("同产品、同版本 \(plugin.version)；依据：\(plugin.classificationSource)"),
             referenceURL: nil, pluginPath: plugin.path)
     }
 
@@ -53,18 +53,18 @@ enum ClassificationResolver {
                 let catalogConflicts = product.map { Set($0.categories) != categories } ?? false
                 if categories.count != 1 || catalogConflicts {
                     result.classification = PluginClassification(components: original.classification?.components ?? [],
-                        source: "分类依据冲突 · 待确认", basis: .relatedFormat, supplementalCategories: [.unknown],
+                        source: L("分类依据冲突 · 待确认"), basis: .relatedFormat, supplementalCategories: [.unknown],
                         evidence: candidates.map(evidence) + (product.map { [$0.evidence] } ?? []))
                 } else {
                     let formats = PluginFormat.allCases.filter { format in candidates.contains { $0.format == format } }
                     result.classification = PluginClassification(components: original.classification?.components ?? [],
-                        source: "关联其他格式 · " + formats.map(\.rawValue).joined(separator: "、"),
+                        source: L("关联其他格式 · ") + formats.map(\.rawValue).joined(separator: "、"),
                         basis: .relatedFormat, supplementalCategories: PluginCategory.normalized(Array(categories)),
                         evidence: candidates.map(evidence))
                 }
             } else if let product {
                 result.classification = PluginClassification(components: original.classification?.components ?? [],
-                    source: "已核实资料 · " + product.names[0], basis: .catalog,
+                    source: L("已核实资料 · ") + product.names[0], basis: .catalog,
                     supplementalCategories: product.categories, evidence: [product.evidence])
             }
             return result

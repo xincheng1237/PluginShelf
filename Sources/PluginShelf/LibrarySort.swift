@@ -9,6 +9,7 @@ enum LibrarySort: String, CaseIterable, Identifiable {
     case largest = "大小：从大到小"
     case smallest = "大小：从小到大"
     var id: String { rawValue }
+    var displayName: String { L10n.text(rawValue) }
     var comparators: [KeyPathComparator<Plugin>] {
         let name = KeyPathComparator(\Plugin.alphabeticalName)
         switch self {
