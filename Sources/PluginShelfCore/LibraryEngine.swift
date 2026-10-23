@@ -4,11 +4,17 @@ import Foundation
 public actor LibraryEngine {
     public let dataDirectory: URL
     private let fm = FileManager.default
-    public init(dataDirectory: URL) { self.dataDirectory = dataDirectory }
+    private let trash: any TrashHandling
+    public init(dataDirectory: URL, trash: any TrashHandling = SystemTrash()) {
+        self.dataDirectory = dataDirectory; self.trash = trash
+    }
     private var vault: URL { dataDirectory.appendingPathComponent("Recovery", isDirectory: true) }
+    private var journals: URL { dataDirectory.appendingPathComponent("SystemTrashRecords", isDirectory: true) }
     private func prepare() throws {
-        try fm.createDirectory(at: vault, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        guard try vault.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw ShelfError.invalid("废纸篓不能是符号链接。") }
+        for directory in [vault, journals] {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            guard try directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { throw ShelfError.invalid("废纸篓记录目录不能是符号链接。") }
+        }
     }
     public func scan(roots: [ScanRoot], applications: [URL]) throws -> ScanReport {
         try prepare()
@@ -120,7 +126,7 @@ public actor LibraryEngine {
         _ = try restoreTarget(entry, roots: roots)
         try fm.moveItem(at: staging, to: target)
     }
-    public func remove(_ plugins: [Plugin], roots: [ScanRoot], retentionDays: Int, now: Date = Date()) throws -> OperationReport {
+    public func remove(_ plugins: [Plugin], roots: [ScanRoot], now: Date = Date()) throws -> OperationReport {
         try prepare()
         var report = OperationReport()
         for plugin in plugins {
@@ -129,50 +135,96 @@ public actor LibraryEngine {
                 try FileSafety.validatePlugin(plugin, roots: roots)
                 let hash = try FileSafety.digest(plugin.url)
                 let id = UUID()
-                let directory = vault.appendingPathComponent(id.uuidString, isDirectory: true)
+                let directory = journals.appendingPathComponent(id.uuidString, isDirectory: true)
                 try fm.createDirectory(at: directory, withIntermediateDirectories: false)
                 slot = directory
-                let entry = BackupEntry(id: id, name: plugin.name, format: plugin.format, originalRoot: plugin.root.path, relativePath: try FileSafety.relative(plugin.url, to: plugin.root.url), payloadPath: plugin.url.lastPathComponent, digest: hash, bytes: plugin.bytes)
-                var record = RecoveryRecord(id: id, entry: entry, days: retentionDays, now: now)
-                // Persist intent before moving any source. A crash can be reconciled on the next launch.
+                let entry = BackupEntry(id: id, name: plugin.name, format: plugin.format, originalRoot: plugin.root.path,
+                    relativePath: try FileSafety.relative(plugin.url, to: plugin.root.url), payloadPath: plugin.url.lastPathComponent,
+                    digest: hash, bytes: plugin.bytes)
+                var record = RecoveryRecord(id: id, entry: entry, now: now)
+                // Persist a tracking bookmark BEFORE the move. A crash after the
+                // system moves the file must not lose the only recovery reference.
+                record.systemTrash = try TrashReference(bookmark: trash.bookmark(plugin.url), identity: FileIdentity(at: plugin.url))
                 try save(record, directory: directory)
                 try FileSafety.validatePlugin(plugin, roots: roots)
-                try fm.moveItem(at: plugin.url, to: directory.appendingPathComponent(entry.payloadPath))
-                guard try FileSafety.digest(directory.appendingPathComponent(entry.payloadPath)) == hash else {
-                    throw ShelfError.invalid("移动期间内容发生变化，文件已保留在废纸篓，暂停自动清理。")
-                }
+                guard try FileIdentity(at: plugin.url) == record.systemTrash?.identity,
+                      try FileSafety.digest(plugin.url) == hash else { throw ShelfError.invalid("插件在操作期间发生变化，已取消。") }
+                let moved = try trash.moveToTrash(plugin.url)
+                record.systemTrash?.bookmark = try trash.bookmark(moved)
+                try save(record, directory: directory)
+                _ = try systemPayload(record)
                 record.state = .active
                 try save(record, directory: directory)
                 report.completed.append(plugin.name)
             } catch {
-                // Never remove a payload after a partial failure; leave its durable journal for recovery.
-                if let slot, let contents = try? fm.contentsOfDirectory(atPath: slot.path), contents.allSatisfy({ $0 == "record.json" }) { try? fm.removeItem(at: slot) }
+                // Discard an intent only if the original is still present and
+                // the slot contains metadata alone. Never discard a moved file.
+                if let slot, let contents = try? fm.contentsOfDirectory(atPath: slot.path) {
+                    if contents.isEmpty { try? fm.removeItem(at: slot) }
+                    else if contents == ["record.json"],
+                            let intent = try? FileSafety.readJSON(RecoveryRecord.self, from: slot.appendingPathComponent("record.json")),
+                            let identity = try? FileIdentity(at: plugin.url), identity == intent.systemTrash?.identity {
+                        try? fm.removeItem(at: slot)
+                    }
+                }
                 report.failures.append("\(plugin.name)：\(error.localizedDescription)")
             }
         }
         return report
     }
-    private func save(_ record: RecoveryRecord, directory: URL) throws { try FileSafety.writeJSON(record, to: directory.appendingPathComponent("record.json")) }
+    private func save(_ record: RecoveryRecord, directory: URL) throws {
+        var durable = record; durable.availability = nil
+        try FileSafety.writeJSON(durable, to: directory.appendingPathComponent("record.json"))
+    }
     private func validatedSlot(_ record: RecoveryRecord) throws -> URL {
-        let directory = try FileSafety.child(record.id.uuidString, of: vault)
+        let directory = try FileSafety.child(record.id.uuidString, of: record.systemTrash == nil ? vault : journals)
         guard record.entry.id == record.id, record.entry.payloadPath == URL(fileURLWithPath: record.entry.payloadPath).lastPathComponent else { throw ShelfError.invalid("恢复记录路径异常。") }
         try FileSafety.safeRelative(record.entry.payloadPath)
         return directory
     }
+    private func systemPayload(_ record: RecoveryRecord) throws -> URL {
+        guard let reference = record.systemTrash else { throw ShelfError.invalid("缺少系统废纸篓记录。") }
+        let url = try trash.resolve(reference.bookmark)
+        guard try trash.contains(url) else { throw ShelfError.invalid("该文件已移出系统废纸篓，未对其执行操作。") }
+        guard try FileIdentity(at: url) == reference.identity,
+              try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid("废纸篓文件已变化，未对其执行操作。") }
+        return url
+    }
+    private func payload(_ record: RecoveryRecord) throws -> URL {
+        if record.systemTrash != nil { return try systemPayload(record) }
+        let url = try FileSafety.child(record.entry.payloadPath, of: validatedSlot(record))
+        guard try FileSafety.digest(url) == record.entry.digest else { throw ShelfError.invalid("旧版废纸篓文件校验失败。") }
+        return url
+    }
     public func recoveryRecords() throws -> [RecoveryRecord] {
         try prepare()
         var records: [RecoveryRecord] = []
-        for directory in try fm.contentsOfDirectory(at: vault, includingPropertiesForKeys: nil) where UUID(uuidString: directory.lastPathComponent) != nil {
+        let directories = try fm.contentsOfDirectory(at: vault, includingPropertiesForKeys: nil) + fm.contentsOfDirectory(at: journals, includingPropertiesForKeys: nil)
+        for directory in directories where UUID(uuidString: directory.lastPathComponent) != nil {
             var record = try FileSafety.readJSON(RecoveryRecord.self, from: FileSafety.child("record.json", of: directory))
-            guard directory.lastPathComponent == record.id.uuidString else { throw ShelfError.invalid("废纸篓记录不一致；已停止自动清理。") }
-            let slot = try validatedSlot(record)
-            let payload = try FileSafety.child(record.entry.payloadPath, of: slot)
-            if record.state == .preparing && fm.fileExists(atPath: payload.path) {
-                // Keep this recoverable, but do not purge an interrupted operation automatically.
-                record.state = .restoring
-                try save(record, directory: slot)
+            guard directory.lastPathComponent == record.id.uuidString else { throw ShelfError.invalid("废纸篓记录不一致。") }
+            guard try validatedSlot(record).standardizedFileURL == directory.standardizedFileURL else {
+                throw ShelfError.invalid("删除记录的存储位置不一致。")
             }
-            if record.state != .restored { records.append(record) }
+            if record.state == .restored { continue }
+            record.availability = .unavailable
+            if let reference = record.systemTrash {
+                do {
+                    let url = try trash.resolve(reference.bookmark)
+                    if try !trash.contains(url) { record.availability = .outsideTrash }
+                    else if try FileIdentity(at: url) != reference.identity { record.availability = .changed }
+                    else {
+                        record.availability = .available
+                        // Refresh tracking data while the volume is reachable.
+                        record.systemTrash?.bookmark = try trash.bookmark(url)
+                        try save(record, directory: directory)
+                    }
+                } catch { /* Keep the record for disconnected disks and missing files. */ }
+            } else if let url = try? FileSafety.child(record.entry.payloadPath, of: directory), fm.fileExists(atPath: url.path) {
+                record.availability = .available
+                if record.state == .preparing { record.state = .restoring; try save(record, directory: directory) }
+            }
+            records.append(record)
         }
         return records.sorted { $0.deletedAt > $1.deletedAt }
     }
@@ -181,23 +233,48 @@ public actor LibraryEngine {
         for var record in try recoveryRecords() where ids.contains(record.id) {
             do {
                 let directory = try validatedSlot(record)
-                record.state = .restoring
-                try save(record, directory: directory)
-                try install(source: FileSafety.child(record.entry.payloadPath, of: directory), entry: record.entry, roots: roots)
-                record.state = .restored
-                try save(record, directory: directory)
-                // Only remove the recovery copy once the installed file has been verified.
+                let source = try payload(record)
+                if record.state == .restoredPendingCleanup {
+                    let target = try restoreTarget(record.entry, roots: roots)
+                    guard try FileSafety.digest(target) == record.entry.digest else { throw ShelfError.invalid("已还原的文件发生变化，废纸篓副本保留。") }
+                } else {
+                    record.state = .restoring; try save(record, directory: directory)
+                    try install(source: source, entry: record.entry, roots: roots)
+                    record.state = .restoredPendingCleanup; try save(record, directory: directory)
+                }
+                // Recheck the tracked file after copying. Never delete a file the
+                // user has already taken out of Trash or replaced there.
+                if record.systemTrash != nil { try fm.removeItem(at: systemPayload(record)) }
+                record.state = .restored; try save(record, directory: directory)
                 try fm.removeItem(at: directory)
                 report.completed.append(record.entry.name)
             } catch { report.failures.append("\(record.entry.name)：\(error.localizedDescription)") }
         }
         return report
     }
-    public func purgeExpired(now: Date = Date()) throws -> OperationReport {
+    /// Called only after explicit UI confirmation. Never empties the whole Trash.
+    public func permanentlyDelete(_ ids: Set<UUID>) throws -> OperationReport {
         var report = OperationReport()
-        for record in try recoveryRecords() where record.state == .active && record.expiresAt <= now {
+        for record in try recoveryRecords() where ids.contains(record.id) {
             do {
                 let directory = try validatedSlot(record)
+                let source = try payload(record)
+                try fm.removeItem(at: source)
+                try fm.removeItem(at: directory)
+                report.completed.append(record.entry.name)
+            } catch { report.failures.append("\(record.entry.name)：\(error.localizedDescription)") }
+        }
+        return report
+    }
+    /// Removes metadata only; unavailable files are never searched for or deleted.
+    public func forgetUnavailable(_ ids: Set<UUID>) throws -> OperationReport {
+        var report = OperationReport()
+        for record in try recoveryRecords() where ids.contains(record.id) {
+            do {
+                guard record.systemTrash != nil, !record.canRecover else { throw ShelfError.invalid("仍可还原的项目不能只移除记录。") }
+                let directory = try validatedSlot(record)
+                let contents = try fm.contentsOfDirectory(atPath: directory.path)
+                guard contents.allSatisfy({ $0 == "record.json" }) else { throw ShelfError.invalid("记录目录内还有文件，已保留。") }
                 try fm.removeItem(at: directory)
                 report.completed.append(record.entry.name)
             } catch { report.failures.append("\(record.entry.name)：\(error.localizedDescription)") }

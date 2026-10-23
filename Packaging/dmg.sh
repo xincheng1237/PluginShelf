@@ -2,7 +2,8 @@
 set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_input="${APP_INPUT:-"$project_root/outputs/PluginShelf.app"}"
-dmg_output="${DMG_OUTPUT:-"$project_root/outputs/PluginShelf-1.0-macOS-Universal.dmg"}"
+version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_input/Contents/Info.plist")"
+dmg_output="${DMG_OUTPUT:-"$project_root/outputs/PluginShelf-$version-macOS-Universal.dmg"}"
 design_work="$project_root/work/dmg-design"
 tool_modules="${DMGBUILD_MODULES:-"$design_work/tools"}"
 export PYTHONPATH="$tool_modules${PYTHONPATH:+:$PYTHONPATH}"
@@ -17,7 +18,7 @@ swiftc "$project_root/Packaging/DmgBackground.swift" -o "$design_work/render-bac
 swiftc "$project_root/Packaging/DmgBookmark.swift" -o "$design_work/encode-bookmark"
 "$design_work/render-background" "$design_work/background.tiff"
 mkdir -p "$(dirname "$dmg_output")"
-cp "$project_root/Packaging/INSTALL_README.txt" "$(dirname "$dmg_output")/PluginShelf-1.0-安装说明.txt"
+cp "$project_root/Packaging/INSTALL_README.txt" "$(dirname "$dmg_output")/PluginShelf-$version-安装说明.txt"
 python3 -m dmgbuild -s "$project_root/Packaging/dmg-settings.py" \
     -D "app=$app_input" -D "background=$design_work/background.tiff" -D "bookmark_encoder=$design_work/encode-bookmark" \
     "安装 PluginShelf" "$dmg_output"

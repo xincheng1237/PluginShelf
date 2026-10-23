@@ -9,7 +9,7 @@ struct Fixture {
     init() throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("PluginShelf-test-" + UUID().uuidString)
         root = ScanRoot(path: directory.appendingPathComponent("Plugins").path, title: "Test")
-        engine = LibraryEngine(dataDirectory: directory.appendingPathComponent("Data"))
+        engine = LibraryEngine(dataDirectory: directory.appendingPathComponent("Data"), trash: FixtureTrash(directory: directory.appendingPathComponent("SystemTrash")))
         try FileManager.default.createDirectory(at: root.url, withIntermediateDirectories: true)
     }
     func plugin(_ name: String = "琴 Piano", ext: String = "vst3") throws -> URL {
@@ -73,33 +73,33 @@ struct Fixture {
     await #expect(throws: (any Error).self) { try await f.engine.inspectBackup(backup, roots: [f.root]) }
 }
 
-@Test func deletionCanBeRestoredAndExpiresAtThirtyDays() async throws {
+@Test func systemTrashDeletionCanBeRestoredAfterRelaunch() async throws {
     let f = try Fixture(); defer { f.cleanup() }
     let original = try f.plugin(); let hash = try FileSafety.digest(original)
     let now = Date(timeIntervalSince1970: 1_780_000_000)
-    let deleted = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 30, now: now)
+    let deleted = try await f.engine.remove(f.scan(), roots: [f.root], now: now)
     #expect(deleted.completed.count == 1)
     #expect(!FileManager.default.fileExists(atPath: original.path))
     let records = try await f.engine.recoveryRecords(); let record = try #require(records.first)
-    #expect(record.expiresAt.timeIntervalSince(now) == 30 * 86400)
-    #expect(try await f.engine.purgeExpired(now: now.addingTimeInterval(29 * 86400)).completed.isEmpty)
+    #expect(record.systemTrash != nil)
+    let restarted = LibraryEngine(dataDirectory: f.directory.appendingPathComponent("Data"), trash: FixtureTrash(directory: f.directory.appendingPathComponent("SystemTrash")))
+    #expect(try await restarted.recoveryRecords().first?.canRecover == true)
     let restored = try await f.engine.restoreRecovery([record.id], roots: [f.root])
     #expect(restored.completed.count == 1)
     #expect(try FileSafety.digest(original) == hash)
     #expect(try await f.engine.recoveryRecords().isEmpty)
 }
 
-@Test func expiryPermanentlyRemovesOnlyExpiredPayloads() async throws {
+@Test func recordsAreNotAutomaticallyPurgedByTheApp() async throws {
     let f = try Fixture(); defer { f.cleanup() }; _ = try f.plugin()
     let now = Date()
-    _ = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 30, now: now)
+    _ = try await f.engine.remove(f.scan(), roots: [f.root], now: now)
     let future = now.addingTimeInterval(30 * 86400 + 1)
     _ = try f.plugin("NewPlugin")
-    _ = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 30, now: future)
-    let result = try await f.engine.purgeExpired(now: future)
-    #expect(result.completed.count == 1)
+    _ = try await f.engine.remove(f.scan(), roots: [f.root], now: future)
     let remaining = try await f.engine.recoveryRecords()
-    #expect(remaining.count == 1 && remaining.first?.entry.name == "NewPlugin")
+    #expect(remaining.count == 2)
+    #expect(remaining.allSatisfy { $0.canRecover })
 }
 
 @Test func pathTraversalAndAbsolutePathsAreRejected() throws {
@@ -139,25 +139,25 @@ struct Fixture {
     try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: original)
     let linked = try #require(f.scan().first(where: { $0.path == alias.path }))
     #expect(!linked.canManage)
-    let result = try await f.engine.remove([linked], roots: [f.root], retentionDays: 30)
+    let result = try await f.engine.remove([linked], roots: [f.root])
     #expect(result.completed.isEmpty && result.failures.count == 1)
     let protected = ScanRoot(path: f.root.path, title: "Protected", protected: true)
     let readOnly = PluginScanner.scan(roots: [protected]).plugins
     #expect(readOnly.allSatisfy { !$0.canManage })
-    #expect(try await f.engine.remove(readOnly, roots: [protected], retentionDays: 30).completed.isEmpty)
+    #expect(try await f.engine.remove(readOnly, roots: [protected]).completed.isEmpty)
     #expect(FileManager.default.fileExists(atPath: original.path))
 }
 
 @Test func changedOriginalDuringRecoveryIsNeverOverwritten() async throws {
     let f = try Fixture(); defer { f.cleanup() }; let original = try f.plugin()
-    _ = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 30)
+    _ = try await f.engine.remove(f.scan(), roots: [f.root])
     let record = try #require(try await f.engine.recoveryRecords().first)
     _ = try f.plugin(); try Data("new install".utf8).write(to: original.appendingPathComponent("Contents/binary"))
     let result = try await f.engine.restoreRecovery([record.id], roots: [f.root])
     #expect(result.completed.isEmpty && result.failures.count == 1)
     #expect(try String(contentsOf: original.appendingPathComponent("Contents/binary"), encoding: .utf8) == "new install")
     #expect(try await f.engine.recoveryRecords().count == 1)
-    #expect(try await f.engine.purgeExpired(now: Date().addingTimeInterval(100 * 86400)).completed.isEmpty)
+    #expect(try await f.engine.recoveryRecords().count == 1)
 }
 
 @Test func unknownRestoreRootRejectedBeforeAnyWrite() async throws {
@@ -189,14 +189,14 @@ struct Fixture {
 
 @Test func interruptedMoveIsRecoverableButNeverAutomaticallyPurged() async throws {
     let f = try Fixture(); defer { f.cleanup() }; _ = try f.plugin()
-    _ = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 1)
+    _ = try await f.engine.remove(f.scan(), roots: [f.root])
     var record = try #require(try await f.engine.recoveryRecords().first)
-    let slot = f.directory.appendingPathComponent("Data/Recovery/" + record.id.uuidString)
+    let slot = f.directory.appendingPathComponent("Data/SystemTrashRecords/" + record.id.uuidString)
     record.state = .preparing
     try FileSafety.writeJSON(record, to: slot.appendingPathComponent("record.json"))
     let reconciled = try #require(try await f.engine.recoveryRecords().first)
-    #expect(reconciled.state == .restoring)
-    #expect(try await f.engine.purgeExpired(now: Date().addingTimeInterval(100 * 86400)).completed.isEmpty)
+    #expect(reconciled.state == .preparing && reconciled.canRecover)
+    #expect(try await f.engine.recoveryRecords().count == 1)
     #expect(try await f.engine.restoreRecovery([record.id], roots: [f.root]).completed.count == 1)
 }
 
@@ -214,7 +214,7 @@ struct Fixture {
     let hash = try FileSafety.digest(original)
     try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: f.root.path)
     defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: f.root.path) }
-    let result = try await f.engine.remove(f.scan(), roots: [f.root], retentionDays: 30)
+    let result = try await f.engine.remove(f.scan(), roots: [f.root])
     #expect(result.completed.isEmpty && result.failures.count == 1)
     #expect(try FileSafety.digest(original) == hash)
     #expect(try await f.engine.recoveryRecords().isEmpty)

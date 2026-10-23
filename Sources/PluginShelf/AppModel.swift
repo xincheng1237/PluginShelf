@@ -20,7 +20,6 @@ final class AppModel: ObservableObject {
     @Published var detailMessage: String?
     @Published var showInspector = true
     @Published var customRoots: [ScanRoot] = []
-    @Published var retentionDays: Int { didSet { UserDefaults.standard.set(retentionDays, forKey: "retentionDays") } }
     @Published var autoRefresh: Bool { didSet { UserDefaults.standard.set(autoRefresh, forKey: "autoRefresh") } }
     let engine: LibraryEngine
     let dataDirectory: URL
@@ -28,7 +27,6 @@ final class AppModel: ObservableObject {
     private var started = false
     init() {
         let defaults = UserDefaults.standard
-        retentionDays = max(1, min(defaults.object(forKey: "retentionDays") as? Int ?? 30, 365))
         autoRefresh = defaults.object(forKey: "autoRefresh") as? Bool ?? true
         isDemo = ProcessInfo.processInfo.arguments.contains("--demo")
         if let data = defaults.data(forKey: "customRoots"), let roots = try? JSONDecoder().decode([ScanRoot].self, from: data) { customRoots = roots }
@@ -69,7 +67,7 @@ final class AppModel: ObservableObject {
         guard !started else { return }; started = true
         if isDemo { makeDemo() }
         await scan()
-        await checkExpiry()
+        await refreshRecovery()
     }
     func scan() async {
         guard !busy else { return }
@@ -83,14 +81,31 @@ final class AppModel: ObservableObject {
             recovery = try await engine.recoveryRecords()
         } catch { present(error) }
     }
-    func checkExpiry() async {
+    var filteredRecovery: [RecoveryRecord] {
+        recovery.filter { search.isEmpty || $0.entry.name.localizedCaseInsensitiveContains(search) ||
+            ($0.entry.originalRoot + "/" + $0.entry.relativePath).localizedCaseInsensitiveContains(search) }
+    }
+    var selectedRecovery: [RecoveryRecord] { filteredRecovery.filter { recoverySelection.contains($0.id) } }
+    var canOperateRecovery: Bool { !busy && !selectedRecovery.isEmpty && selectedRecovery.allSatisfy(\.canRecover) }
+    func refreshRecovery() async {
         guard !busy else { return }
-        busy = true
-        defer { busy = false }
+        busy = true; defer { busy = false }
+        do { recovery = try await engine.recoveryRecords() } catch { present(error) }
+    }
+    func permanentlyDelete(_ ids: Set<UUID>) async {
+        guard !busy else { return }; busy = true; activity = "正在永久删除…"
+        do { showReport(try await engine.permanentlyDelete(ids), action: "永久删除") } catch { present(error) }
+        recoverySelection.removeAll(); busy = false; await scan()
+    }
+    func forgetUnavailable(_ ids: Set<UUID>) async {
+        guard !busy else { return }; busy = true
+        do { showReport(try await engine.forgetUnavailable(ids), action: "移除记录") } catch { present(error) }
+        recoverySelection.removeAll(); busy = false; await refreshRecovery()
+    }
+    func openSystemTrash() {
         do {
-            let report = try await engine.purgeExpired()
-            recovery = try await engine.recoveryRecords()
-            if !report.completed.isEmpty || !report.failures.isEmpty { showReport(report, action: "到期清理") }
+            let url = try FileManager.default.url(for: .trashDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            NSWorkspace.shared.open(url)
         } catch { present(error) }
     }
     func setCategories(_ categories: [PluginCategory]?, for items: [Plugin]) async {
@@ -110,7 +125,7 @@ final class AppModel: ObservableObject {
     func periodic() async {
         while !Task.isCancelled {
             do { try await Task.sleep(for: .seconds(60)) } catch { return }
-            await checkExpiry()
+            await refreshRecovery()
             if autoRefresh, Date().timeIntervalSince(lastScan ?? .distantPast) >= 300 { await scan() }
         }
     }
@@ -156,15 +171,17 @@ final class AppModel: ObservableObject {
         do { showReport(try await engine.restoreBackup(url, roots: roots), action: "备份恢复") } catch { present(error) }
         busy = false; await scan()
     }
-    func delete(_ snapshot: [Plugin], retentionDays: Int) async {
+    func delete(_ snapshot: [Plugin]) async {
         guard !busy else { return }; busy = true; activity = "正在移到废纸篓…"
-        do { showReport(try await engine.remove(snapshot, roots: roots, retentionDays: retentionDays), action: "移到废纸篓") }
+        do { showReport(try await engine.remove(snapshot, roots: roots), action: "移到废纸篓") }
         catch { present(error) }
         selection.removeAll(); busy = false; await scan()
     }
     func restoreDeleted() async {
-        guard !busy, !recoverySelection.isEmpty else { return }; busy = true; activity = "正在还原…"
-        do { showReport(try await engine.restoreRecovery(recoverySelection, roots: roots), action: "还原") } catch { present(error) }
+        guard canOperateRecovery else { return }
+        let ids = Set(selectedRecovery.map(\.id))
+        busy = true; activity = "正在还原…"
+        do { showReport(try await engine.restoreRecovery(ids, roots: roots), action: "还原") } catch { present(error) }
         recoverySelection.removeAll(); busy = false; await scan()
     }
     func addRoot() {
