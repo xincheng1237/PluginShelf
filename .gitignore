@@ -1,0 +1,20 @@
+.build/
+.swiftpm/
+.DS_Store
+work/
+outputs/
+.build-release/
+
+# Local verification output and machine-specific inventories
+docs/*.log
+docs/*audit*.json
+docs/*motion*.json
+docs/*verification-*.json
+docs/submission-assets-*.json
+*.pluginshelfbackup/
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.mobileprovision
