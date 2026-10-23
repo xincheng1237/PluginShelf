@@ -10,7 +10,11 @@ struct BackupPreview: Identifiable {
 struct DeletionSnapshot: Identifiable {
     let id = UUID()
     let plugins: [Plugin]
-    let days: Int
+}
+
+struct RecoveryDeletionSnapshot: Identifiable {
+    let id = UUID()
+    let records: [RecoveryRecord]
 }
 
 struct ClassificationSnapshot: Identifiable {
@@ -27,6 +31,9 @@ struct LibraryView: View {
     @State private var sidebarAnimation = SidebarAnimationController()
     @State private var sidebarIsVisible = true
     @State private var deletion: DeletionSnapshot?
+    @State private var permanentDeletion: RecoveryDeletionSnapshot?
+    @State private var forgetting = Set<UUID>()
+    @State private var showForgetConfirmation = false
     @State private var backup: BackupPreview?
     @State private var classification: ClassificationSnapshot?
     private var isRecovery: Bool { model.route == "recovery" }
@@ -60,11 +67,21 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showCustomDays) { CustomDaysSheet(value: $model.days) }
         .sheet(item: $deletion) { snapshot in
-            DeleteSheet(plugins: snapshot.plugins, days: snapshot.days, hosts: model.hostNames) {
+            DeleteSheet(plugins: snapshot.plugins, hosts: model.hostNames) {
                 deletion = nil
-                Task { await model.delete(snapshot.plugins, retentionDays: snapshot.days) }
+                Task { await model.delete(snapshot.plugins) }
             }
         }
+        .sheet(item: $permanentDeletion) { snapshot in
+            PermanentDeleteSheet(records: snapshot.records) {
+                permanentDeletion = nil
+                Task { await model.permanentlyDelete(Set(snapshot.records.map(\.id))) }
+            }
+        }
+        .confirmationDialog("移除所选删除记录？", isPresented: $showForgetConfirmation, titleVisibility: .visible) {
+            Button("移除记录", role: .destructive) { let ids = forgetting; Task { await model.forgetUnavailable(ids) } }
+            Button("取消", role: .cancel) {}
+        } message: { Text("仅移除应用内的记录，不删除任何文件。之后将无法通过这些记录追踪或还原插件。") }
         .sheet(item: $backup) { item in
             RestoreSheet(manifest: item.manifest) { backup = nil; Task { await model.restoreBackup(item.url) } }
         }
@@ -252,21 +269,28 @@ struct LibraryView: View {
     private var recoveryHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("废纸篓", systemImage: "trash").font(.title2.weight(.semibold))
-            Text("插件默认保留 \(model.retentionDays) 天，到期后会彻底删除。")
+            Text("新删除的插件进入系统废纸篓。30 天自动清理由 Finder 设置控制；清空废纸篓会提前永久删除。")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("打开系统废纸篓", action: model.openSystemTrash)
+                if model.recovery.contains(where: { $0.systemTrash == nil }) {
+                    Text("旧版项目仍可还原或手动永久删除，不再自动清理。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(25)
     }
     private var recoveryItems: [RecoveryRecord] {
-        model.recovery.filter { model.search.isEmpty || $0.entry.name.localizedCaseInsensitiveContains(model.search) || $0.entry.originalRoot.localizedCaseInsensitiveContains(model.search) }
+        model.filteredRecovery
     }
     private var recoveryTable: some View {
         Table(recoveryItems, selection: $model.recoverySelection) {
             TableColumn("插件") { record in VStack(alignment: .leading, spacing: 3) { Text(record.entry.name).fontWeight(.medium); Text(record.entry.format.rawValue).font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 7) }.width(min: 150, ideal: 220)
             TableColumn("删除日期") { record in Text(record.deletedAt, format: .dateTime.year().month().day()).foregroundStyle(.secondary) }
-            TableColumn("永久删除日期") { record in Text(record.expiresAt, format: .dateTime.year().month().day()).foregroundStyle(record.expiresAt.timeIntervalSinceNow < 3 * 86400 ? .orange : .secondary) }
-            TableColumn("状态") { record in Text(record.state == .active ? "可还原" : "需检查 · 不自动清理").font(.caption).foregroundStyle(.secondary) }
+            TableColumn("位置") { record in Text(record.locationText).foregroundStyle(.secondary) }
+            TableColumn("状态") { record in Text(record.statusText).font(.caption).foregroundStyle(.secondary) }
         }.frame(minHeight: 0, maxHeight: .infinity).overlay {
-            if recoveryItems.isEmpty { ContentUnavailableView("废纸篓是空的", systemImage: "arrow.counterclockwise.circle", description: Text("移入这里的插件可在到期前还原。")) }
+            if recoveryItems.isEmpty { ContentUnavailableView("废纸篓是空的", systemImage: "arrow.counterclockwise.circle", description: Text("删除的插件会显示在这里；仍在废纸篓中的项目可以还原。")) }
         }
     }
     private func statusBar(width: CGFloat) -> some View {
@@ -278,10 +302,14 @@ struct LibraryView: View {
                     Image(systemName: "info.circle").foregroundStyle(Color.accentColor)
                     Text(model.notice).lineLimit(1)
                     Button { model.notice = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain).help("关闭提示")
-                } else { Text(isRecovery ? "\(model.recovery.count) 项可恢复记录" : "已选 \(model.selected.count) 项 · \(byteString(model.selectedBytes))").monospacedDigit() }
+                } else { Text(isRecovery ? "已选 \(model.selectedRecovery.count) 项 · \(model.recovery.count) 条记录" : "已选 \(model.selected.count) 项 · \(byteString(model.selectedBytes))").monospacedDigit() }
                 Spacer()
                 if !model.scanWarnings.isEmpty { Button("\(model.scanWarnings.count) 条扫描提示") { model.detailMessage = model.scanWarnings.joined(separator: "\n\n") }.buttonStyle(.plain).foregroundStyle(.orange) }
                 if width >= 500, let date = model.lastScan { Text("扫描于 \(date.formatted(.dateTime.hour().minute()))") }
+                if isRecovery {
+                    Button("选择可还原项") { model.recoverySelection = Set(recoveryItems.filter(\.canRecover).map(\.id)) }
+                        .buttonStyle(.plain).foregroundStyle(Color.accentColor).disabled(model.busy)
+                }
                 if !isRecovery { Button("选择结果") { model.selection = Set(model.filtered.map(\.id)) }.buttonStyle(.plain).foregroundStyle(Color.accentColor).disabled(model.busy || model.filtered.isEmpty) }
             }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 18).frame(height: 36)
         }.background(.bar)
@@ -292,9 +320,16 @@ struct LibraryView: View {
                 .help("重新扫描 ⌘R").disabled(model.busy)
         }
         if isRecovery {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button { Task { await model.restoreDeleted() } } label: { Label("还原所选", systemImage: "arrow.uturn.backward") }
-                    .disabled(model.recoverySelection.isEmpty || model.busy)
+                    .disabled(!model.canOperateRecovery)
+                Button(role: .destructive) { permanentDeletion = RecoveryDeletionSnapshot(records: model.selectedRecovery) }
+                    label: { Label("永久删除", systemImage: "trash.slash") }
+                    .help("永久删除所选插件").disabled(!model.canOperateRecovery)
+                if !model.selectedRecovery.isEmpty && model.selectedRecovery.allSatisfy({ $0.systemTrash != nil && !$0.canRecover }) {
+                    Button("移除记录") { forgetting = Set(model.selectedRecovery.map(\.id)); showForgetConfirmation = true }
+                        .disabled(model.busy)
+                }
             }
         } else {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -304,7 +339,7 @@ struct LibraryView: View {
                     .disabled(model.busy)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button(role: .destructive) { deletion = DeletionSnapshot(plugins: model.manageable, days: model.retentionDays) } label: { Label("移到废纸篓", systemImage: "trash") }
+                Button(role: .destructive) { deletion = DeletionSnapshot(plugins: model.manageable) } label: { Label("移到废纸篓", systemImage: "trash") }
                     .help("将所选插件移到废纸篓").disabled(model.manageable.isEmpty || model.busy || model.manageable.count != model.selected.count)
             }
         }
@@ -326,7 +361,7 @@ struct LibraryView: View {
         columnVisibility = visible ? .all : .detailOnly
     }
     @ViewBuilder private var inspector: some View {
-        if isRecovery, let record = model.recovery.first(where: { model.recoverySelection.contains($0.id) }) {
+        if isRecovery, let record = model.selectedRecovery.first {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     Image(systemName: "arrow.uturn.backward.circle").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(Color.accentColor)
@@ -334,9 +369,13 @@ struct LibraryView: View {
                     Divider()
                     detail("原始目录", record.entry.originalRoot + "/" + record.entry.relativePath)
                     detail("移入时间", record.deletedAt.formatted())
-                    detail("永久删除时间", record.expiresAt.formatted())
-                    Text("到期前可还原到原位置。如果原位置存在同名文件，将跳过而不覆盖。").font(.caption).foregroundStyle(.secondary)
-                    Button("还原所选插件") { Task { await model.restoreDeleted() } }.disabled(model.busy)
+                    detail("位置", record.locationText)
+                    detail("状态", record.statusText)
+                    Text(record.canRecover ? "可还原到原位置；同名文件不会覆盖。系统废纸篓清空后无法还原。" : "文件可能已被清理、移出废纸篓，或所在磁盘未连接。请先在 Finder 中检查。").font(.caption).foregroundStyle(.secondary)
+                    Button("还原所选插件") { Task { await model.restoreDeleted() } }.disabled(!model.canOperateRecovery)
+                    Button("永久删除所选插件", role: .destructive) {
+                        permanentDeletion = RecoveryDeletionSnapshot(records: model.selectedRecovery)
+                    }.disabled(!model.canOperateRecovery)
                 }.padding(22)
             }
         } else if !isRecovery, model.selected.count == 1, let plugin = model.selected.first {

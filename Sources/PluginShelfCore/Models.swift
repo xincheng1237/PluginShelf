@@ -110,16 +110,29 @@ public struct BackupManifest: Codable, Sendable {
     }
 }
 
-public enum RecoveryState: String, Codable, Sendable { case preparing, active, restoring, restored }
+public enum RecoveryState: String, Codable, Sendable { case preparing, active, restoring, restoredPendingCleanup, restored }
 public struct RecoveryRecord: Codable, Sendable, Identifiable {
     public let id: UUID
     public let entry: BackupEntry
     public let deletedAt: Date
-    public let expiresAt: Date
+    public let expiresAt: Date?
     public var state: RecoveryState
-    public init(id: UUID, entry: BackupEntry, days: Int, now: Date = Date()) {
+    // nil means a 1.0 private-vault record. Optional fields keep its JSON readable.
+    public var systemTrash: TrashReference? = nil
+    public var availability: RecoveryAvailability? = nil
+    public var canRecover: Bool { availability == .available || availability == nil }
+    public var locationText: String { systemTrash == nil ? "旧版废纸篓" : "系统废纸篓" }
+    public var statusText: String {
+        switch availability {
+        case .unavailable: return "已清除或不可访问"
+        case .outsideTrash: return "已移出废纸篓"
+        case .changed: return "文件已变化 · 需检查"
+        default: return state == .restoredPendingCleanup ? "已还原 · 待清理副本" : "可还原"
+        }
+    }
+    public init(id: UUID, entry: BackupEntry, days: Int? = nil, now: Date = Date()) {
         self.id = id; self.entry = entry; deletedAt = now
-        expiresAt = now.addingTimeInterval(Double(max(1, min(days, 365))) * 86400)
+        expiresAt = days.map { now.addingTimeInterval(Double(max(1, min($0, 365))) * 86400) }
         state = .preparing
     }
 }

@@ -4,7 +4,6 @@ import PluginShelfCore
 
 struct DeleteSheet: View {
     let plugins: [Plugin]
-    let days: Int
     let hosts: [String]
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -47,11 +46,11 @@ struct DeleteSheet: View {
                         .font(.callout).foregroundStyle(.secondary)
                 } else {
                     Label("移到废纸篓后，原目录中的插件将不可用。", systemImage: "exclamationmark.triangle").font(.headline)
-                    Text("将保留 \(days) 天，预计于 \(Date().addingTimeInterval(Double(days) * 86400).formatted(date: .long, time: .shortened)) 永久删除。到期清理无需再次确认；App 退出期间暂停，下次启动时继续。")
+                    Text("插件将进入系统废纸篓。自动清理取决于 Finder 的“30 天后移除废纸篓中的项目”设置；手动清空废纸篓会提前永久删除。")
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                     Text("请输入“\(phrase)”确认数量：").font(.callout)
                     TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel("删除确认文字")
-                    Toggle("我已核对清单，并理解到期后无法从废纸篓找回", isOn: $acknowledged).toggleStyle(.checkbox)
+                    Toggle("我已核对清单，并理解清空废纸篓后无法还原", isOn: $acknowledged).toggleStyle(.checkbox)
                 }
             }.id(stage).transition(.opacity)
             if !hosts.isEmpty { Label("检测到正在运行：\(hosts.joined(separator: "、"))。请先保存工程并退出宿主。", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange) }
@@ -173,5 +172,49 @@ struct ClassificationSheet: View {
             let values = plugins.map { Set($0.categories.filter { $0 != .unknown }) }
             categories = values.first.map { first in values.allSatisfy { $0 == first } ? first : [] } ?? []
         }
+    }
+}
+
+struct PermanentDeleteSheet: View {
+    let records: [RecoveryRecord]
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var stage = 1
+    @State private var confirmation = ""
+    @State private var acknowledged = false
+    private var phrase: String { "永久删除 \(records.count) 项" }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Label(stage == 1 ? "核对永久删除清单" : "最后确认永久删除", systemImage: "trash.slash")
+                .font(.title2.weight(.semibold)).foregroundStyle(.red)
+            Text("第 \(stage) 步，共 2 步 · \(records.count) 项")
+            if stage == 1 {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(records) { record in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(record.entry.name + " · " + record.entry.format.rawValue).fontWeight(.medium)
+                                Text(record.entry.originalRoot + "/" + record.entry.relativePath).font(.caption).textSelection(.enabled)
+                            }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(height: 200)
+            } else {
+                Text("所选插件文件将彻底删除，无法再从废纸篓还原。")
+                TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel("永久删除确认文字")
+                Toggle("我已核对清单，确认永久删除", isOn: $acknowledged).toggleStyle(.checkbox)
+            }
+            Divider()
+            HStack {
+                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                if stage == 1 { Button("继续核对") { stage = 2 }.buttonStyle(.borderedProminent) }
+                else {
+                    Button("返回清单") { stage = 1; confirmation = ""; acknowledged = false }
+                    Button("永久删除", role: .destructive, action: onConfirm)
+                        .disabled(confirmation != phrase || !acknowledged)
+                }
+            }
+        }.padding(28).frame(width: 590)
     }
 }

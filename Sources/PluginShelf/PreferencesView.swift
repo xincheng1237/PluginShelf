@@ -7,9 +7,10 @@ struct PreferencesView: View {
     var body: some View {
         Form {
             Section {
-                Stepper(value: $model.retentionDays, in: 1...365) { HStack { Text("删除后保留"); Spacer(); Text("\(model.retentionDays) 天").foregroundStyle(.secondary).monospacedDigit() } }
-                Text("默认 30 天。到期项目会在 App 启动及运行期间自动永久删除。退出 App 后暂停，下次启动时继续。调整天数只影响此后删除的插件。")
+                Text("新删除的插件会进入系统废纸篓，不安装后台清理程序。")
+                Text("如需自动清理，请在 Finder → 设置 → 高级中勾选“30 天后移除废纸篓中的项目”。此设置影响整个系统废纸篓；手动清空会提前永久删除。")
                     .font(.caption).foregroundStyle(.secondary)
+                Button("打开系统废纸篓", action: model.openSystemTrash)
             } header: { Label("废纸篓", systemImage: "arrow.counterclockwise") }
             Section {
                 Toggle("自动刷新插件资料库", isOn: $model.autoRefresh)
@@ -31,7 +32,7 @@ struct PreferencesView: View {
                 Text("备份仅包含选中的插件文件，不包含授权、外置音色库、独立预设或安装器依赖。跨电脑恢复可能仍需厂商安装器与重新授权。")
             } header: { Label("备份边界", systemImage: "archivebox") }.font(.caption).foregroundStyle(.secondary)
             Section {
-                LabeledContent("版本", value: "1.0")
+                LabeledContent("版本", value: "1.1")
                 Text("本版本不申请管理员权限。受保护目录中的项目可查看；写入、移动受系统权限约束，失败时保留源文件并显示结果。")
                     .font(.caption).foregroundStyle(.secondary)
             }
