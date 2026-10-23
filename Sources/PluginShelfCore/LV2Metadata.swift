@@ -36,7 +36,7 @@ enum LV2Metadata {
             if categories.isEmpty && types.contains(where: others.contains) { categories.append(.other) }
             return PluginComponent(identifier: subject, name: properties.first(where: { $0.predicate == name && $0.literal })?.object ?? subject, categories: PluginCategory.normalized(categories), declaration: types.filter { $0 != "Plugin" }.joined(separator: ", "))
         }
-        return PluginClassification(components: components, source: "插件声明 · LV2 Turtle")
+        return PluginClassification(components: components, source: L("插件声明 · LV2 Turtle"))
     }
 }
 

@@ -13,7 +13,7 @@ final class AppModel: ObservableObject {
     @Published var days = 0
     @Published var sortOrder = LibrarySort.nameAscending.comparators
     @Published var busy = false
-    @Published var activity = "准备就绪"
+    @Published var activity = L("准备就绪")
     @Published var lastScan: Date?
     @Published var scanWarnings: [String] = []
     @Published var notice = ""
@@ -37,7 +37,7 @@ final class AppModel: ObservableObject {
         }
         engine = LibraryEngine(dataDirectory: dataDirectory)
     }
-    var roots: [ScanRoot] { isDemo ? [ScanRoot(path: dataDirectory.appendingPathComponent("DemoPlugins").path, title: "演示样本")] : ScanRoot.standard + customRoots }
+    var roots: [ScanRoot] { isDemo ? [ScanRoot(path: dataDirectory.appendingPathComponent("DemoPlugins").path, title: L("演示样本"))] : ScanRoot.standard + customRoots }
     var filtered: [Plugin] {
         var query = PluginQuery(); query.text = search
         query.days = route == "recent" ? max(1, days == 0 ? 30 : days) : days
@@ -49,12 +49,12 @@ final class AppModel: ObservableObject {
     var selected: [Plugin] { filtered.filter { selection.contains($0.id) } }
     var manageable: [Plugin] { selected.filter(\.canManage) }
     var title: String {
-        if let category = PluginCategory.allCases.first(where: { route == $0.route }) { return category.rawValue }
+        if let category = PluginCategory.allCases.first(where: { route == $0.route }) { return category.displayName }
         return switch route {
-        case "recent": "最近添加"
-        case "recovery": "废纸篓"
-        case "all", nil: "所有插件"
-        default: "\(route ?? "") 插件"
+        case "recent": L("最近添加")
+        case "recovery": L("废纸篓")
+        case "all", nil: L("所有插件")
+        default: L("\(route ?? "") 插件")
         }
     }
     var totalBytes: Int64 { plugins.reduce(0) { $0 + $1.bytes } }
@@ -71,8 +71,8 @@ final class AppModel: ObservableObject {
     }
     func scan() async {
         guard !busy else { return }
-        busy = true; activity = "正在扫描插件…"
-        defer { busy = false; activity = "准备就绪" }
+        busy = true; activity = L("正在扫描插件…")
+        defer { busy = false; activity = L("准备就绪") }
         do {
             let apps = isDemo ? [] : [URL(fileURLWithPath: "/Applications"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
             let report = try await engine.scan(roots: roots, applications: apps)
@@ -93,13 +93,13 @@ final class AppModel: ObservableObject {
         do { recovery = try await engine.recoveryRecords() } catch { present(error) }
     }
     func permanentlyDelete(_ ids: Set<UUID>) async {
-        guard !busy else { return }; busy = true; activity = "正在永久删除…"
-        do { showReport(try await engine.permanentlyDelete(ids), action: "永久删除") } catch { present(error) }
+        guard !busy else { return }; busy = true; activity = L("正在永久删除…")
+        do { showReport(try await engine.permanentlyDelete(ids), action: L("永久删除")) } catch { present(error) }
         recoverySelection.removeAll(); busy = false; await scan()
     }
     func forgetUnavailable(_ ids: Set<UUID>) async {
         guard !busy else { return }; busy = true
-        do { showReport(try await engine.forgetUnavailable(ids), action: "移除记录") } catch { present(error) }
+        do { showReport(try await engine.forgetUnavailable(ids), action: L("移除记录")) } catch { present(error) }
         recoverySelection.removeAll(); busy = false; await refreshRecovery()
     }
     func openSystemTrash() {
@@ -119,7 +119,7 @@ final class AppModel: ObservableObject {
                 plugins[index].categoryOverride = categories.map(PluginCategory.normalized)
             }
             selection.formIntersection(Set(filtered.map(\.id)))
-            notice = categories == nil ? "已恢复自动分类" : "已更新 \(items.count) 项插件的分类"
+            notice = categories == nil ? L("已恢复自动分类") : L("已更新 \(items.count) 项插件的分类")
         } catch { present(error) }
     }
     func periodic() async {
@@ -133,73 +133,73 @@ final class AppModel: ObservableObject {
         let items = manageable
         guard !items.isEmpty, !busy else { return }
         let panel = NSSavePanel()
-        panel.title = "导出插件备份文件夹"; panel.prompt = "导出备份"
+        panel.title = L("导出插件备份文件夹"); panel.prompt = L("导出备份")
         let stamp = Date().formatted(.iso8601.year().month().day().dateSeparator(.dash))
-        panel.nameFieldStringValue = "PluginShelf-\(stamp)-\(items.count)项.pluginshelfbackup"
+        panel.nameFieldStringValue = L("PluginShelf-\(stamp)-\(items.count)项.pluginshelfbackup")
         panel.canCreateDirectories = true
-        panel.message = "备份包含插件文件、原路径与 SHA-256 校验清单。不包含外置音色库、许可证或独立预设。"
+        panel.message = L("备份包含插件文件、原路径与 SHA-256 校验清单。不包含外置音色库、许可证或独立预设。")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        guard !FileManager.default.fileExists(atPath: url.path) else { detailMessage = "请选择一个不存在的新文件夹名称，备份不会覆盖已有文件。"; return }
-        busy = true; activity = "正在复制并校验备份…"
+        guard !FileManager.default.fileExists(atPath: url.path) else { detailMessage = L("请选择一个不存在的新文件夹名称，备份不会覆盖已有文件。"); return }
+        busy = true; activity = L("正在复制并校验备份…")
         Task {
-            defer { busy = false; activity = "准备就绪" }
+            defer { busy = false; activity = L("准备就绪") }
             do {
                 _ = try await engine.export(items, to: url, roots: roots)
-                notice = "已备份 \(items.count) 项插件"
+                notice = L("已备份 \(items.count) 项插件")
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch { present(error) }
         }
     }
     func chooseBackup() async -> (URL, BackupManifest)? {
         guard !busy else { return nil }
-        let panel = NSOpenPanel(); panel.title = "选择 PluginShelf 备份文件夹"
+        let panel = NSOpenPanel(); panel.title = L("选择 PluginShelf 备份文件夹")
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.treatsFilePackagesAsDirectories = true
-        panel.message = "选择含 manifest.json 的 .pluginshelfbackup 文件夹；若已压缩，请先在 Finder 中解压。"
+        panel.message = L("选择含 manifest.json 的 .pluginshelfbackup 文件夹；若已压缩，请先在 Finder 中解压。")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         return await inspectBackup(url)
     }
     func inspectBackup(_ url: URL) async -> (URL, BackupManifest)? {
         guard !busy else { return nil }
-        busy = true; activity = "正在验证备份完整性…"
-        defer { busy = false; activity = "准备就绪" }
+        busy = true; activity = L("正在验证备份完整性…")
+        defer { busy = false; activity = L("准备就绪") }
         do { return (url, try await engine.inspectBackup(url, roots: roots)) }
         catch { present(error); return nil }
     }
     func restoreBackup(_ url: URL) async {
-        guard !busy else { return }; busy = true; activity = "正在恢复插件…"
-        do { showReport(try await engine.restoreBackup(url, roots: roots), action: "备份恢复") } catch { present(error) }
+        guard !busy else { return }; busy = true; activity = L("正在恢复插件…")
+        do { showReport(try await engine.restoreBackup(url, roots: roots), action: L("备份恢复")) } catch { present(error) }
         busy = false; await scan()
     }
     func delete(_ snapshot: [Plugin]) async {
-        guard !busy else { return }; busy = true; activity = "正在移到废纸篓…"
-        do { showReport(try await engine.remove(snapshot, roots: roots), action: "移到废纸篓") }
+        guard !busy else { return }; busy = true; activity = L("正在移到废纸篓…")
+        do { showReport(try await engine.remove(snapshot, roots: roots), action: L("移到废纸篓")) }
         catch { present(error) }
         selection.removeAll(); busy = false; await scan()
     }
     func restoreDeleted() async {
         guard canOperateRecovery else { return }
         let ids = Set(selectedRecovery.map(\.id))
-        busy = true; activity = "正在还原…"
-        do { showReport(try await engine.restoreRecovery(ids, roots: roots), action: "还原") } catch { present(error) }
+        busy = true; activity = L("正在还原…")
+        do { showReport(try await engine.restoreRecovery(ids, roots: roots), action: L("还原")) } catch { present(error) }
         recoverySelection.removeAll(); busy = false; await scan()
     }
     func addRoot() {
-        let panel = NSOpenPanel(); panel.title = "添加自定义插件目录"; panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.message = "选择专门的插件目录，避免选择整个磁盘、用户目录或应用程序目录。"
+        let panel = NSOpenPanel(); panel.title = L("添加自定义插件目录"); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.message = L("选择专门的插件目录，避免选择整个磁盘、用户目录或应用程序目录。")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let path = url.resolvingSymlinksInPath().path
         let forbidden = ["/", "/Library", "/Applications", "/Users", FileManager.default.homeDirectoryForCurrentUser.path, "/Volumes"]
-        guard !forbidden.contains(path), !path.hasPrefix("/System"), !url.pathComponents.contains(where: { $0.hasSuffix(".app") }) else { detailMessage = "请选择专门用于安装插件的文件夹。"; return }
+        guard !forbidden.contains(path), !path.hasPrefix("/System"), !url.pathComponents.contains(where: { $0.hasSuffix(".app") }) else { detailMessage = L("请选择专门用于安装插件的文件夹。"); return }
         guard !roots.contains(where: { $0.path == path }) else { return }
-        customRoots.append(ScanRoot(path: path, title: "自定义目录")); saveRoots()
+        customRoots.append(ScanRoot(path: path, title: L("自定义目录"))); saveRoots()
         Task { await scan() }
     }
     func removeRoot(_ root: ScanRoot) { customRoots.removeAll { $0 == root }; saveRoots(); Task { await scan() } }
     private func saveRoots() { UserDefaults.standard.set(try? JSONEncoder().encode(customRoots), forKey: "customRoots") }
     private func showReport(_ report: OperationReport, action: String) {
         notice = "\(action)：\(report.summary)"
-        if !report.failures.isEmpty { detailMessage = notice + "\n\n" + report.failures.joined(separator: "\n\n") + "\n\n若目录受权限保护，请在 Finder 中核对权限；本版本不会绕过系统权限。" }
+        if !report.failures.isEmpty { detailMessage = notice + "\n\n" + report.failures.joined(separator: "\n\n") + L("\n\n若目录受权限保护，请在 Finder 中核对权限；本版本不会绕过系统权限。") }
     }
     private func present(_ error: any Error) { detailMessage = error.localizedDescription }
     private func makeDemo() {
@@ -224,4 +224,4 @@ final class AppModel: ObservableObject {
     }
 }
 
-func byteString(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
+func byteString(_ value: Int64) -> String { ByteCountFormatStyle(style: .file, spellsOutZero: false, locale: L10n.locale).format(value) }

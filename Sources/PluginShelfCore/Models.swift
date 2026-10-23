@@ -31,15 +31,15 @@ public struct ScanRoot: Codable, Hashable, Sendable, Identifiable {
     public static var standard: [Self] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var roots: [Self] = []
-        for (prefix, title) in [("/Library", "本机共享"), (home + "/Library", "当前用户"), ("/Network/Library", "网络资源库")] {
+        for (prefix, title) in [("/Library", L("本机共享")), (home + "/Library", L("当前用户")), ("/Network/Library", L("网络资源库"))] {
             for folder in ["Components", "VST3", "VST", "CLAP", "LV2"] {
                 roots.append(Self(path: prefix + "/Audio/Plug-Ins/" + folder, title: title))
             }
             roots.append(Self(path: prefix + "/Application Support/Avid/Audio/Plug-Ins", title: title))
-            roots.append(Self(path: prefix + "/Application Support/Avid/Audio/Plug-Ins (Unused)", title: title + " · 停用"))
+            roots.append(Self(path: prefix + "/Application Support/Avid/Audio/Plug-Ins (Unused)", title: title + L(" · 停用")))
             roots.append(Self(path: prefix + "/Application Support/Digidesign/Plug-Ins", title: title))
         }
-        roots.append(Self(path: home + "/.lv2", title: "当前用户"))
+        roots.append(Self(path: home + "/.lv2", title: L("当前用户")))
         return roots
     }
 }
@@ -59,8 +59,8 @@ public struct Plugin: Codable, Hashable, Identifiable, Sendable {
     public var classification: PluginClassification? = nil
     public var categoryOverride: [PluginCategory]? = nil
     public var categories: [PluginCategory] { categoryOverride ?? classification?.categories ?? [.unknown] }
-    public var categoryText: String { categories.map(\.rawValue).joined(separator: "、") }
-    public var classificationSource: String { categoryOverride == nil ? (classification?.source ?? "暂无可靠的分类依据") : "手动设置" }
+    public var categoryText: String { categories.map(\.displayName).joined(separator: L10n.listSeparator) }
+    public var classificationSource: String { categoryOverride == nil ? (classification.map { L10n.rendered($0.source) } ?? L("暂无可靠的分类依据")) : L("手动设置") }
     public var id: String { path }
     public var url: URL { URL(fileURLWithPath: path) }
     public var canManage: Bool { restriction == nil }
@@ -121,13 +121,13 @@ public struct RecoveryRecord: Codable, Sendable, Identifiable {
     public var systemTrash: TrashReference? = nil
     public var availability: RecoveryAvailability? = nil
     public var canRecover: Bool { availability == .available || availability == nil }
-    public var locationText: String { systemTrash == nil ? "旧版废纸篓" : "系统废纸篓" }
+    public var locationText: String { systemTrash == nil ? L("旧版废纸篓") : L("系统废纸篓") }
     public var statusText: String {
         switch availability {
-        case .unavailable: return "已清除或不可访问"
-        case .outsideTrash: return "已移出废纸篓"
-        case .changed: return "文件已变化 · 需检查"
-        default: return state == .restoredPendingCleanup ? "已还原 · 待清理副本" : "可还原"
+        case .unavailable: return L("已清除或不可访问")
+        case .outsideTrash: return L("已移出废纸篓")
+        case .changed: return L("文件已变化 · 需检查")
+        default: return state == .restoredPendingCleanup ? L("已还原 · 待清理副本") : L("可还原")
         }
     }
     public init(id: UUID, entry: BackupEntry, days: Int? = nil, now: Date = Date()) {
@@ -142,7 +142,7 @@ public struct OperationReport: Sendable {
     public var failures: [String] = []
     public init() {}
     public var summary: String {
-        "完成 \(completed.count) 项" + (failures.isEmpty ? "" : "，\(failures.count) 项未完成")
+        L("完成 \(completed.count) 项") + (failures.isEmpty ? "" : L("，\(failures.count) 项未完成"))
     }
 }
 

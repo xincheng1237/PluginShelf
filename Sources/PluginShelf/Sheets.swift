@@ -3,6 +3,7 @@ import AppKit
 import PluginShelfCore
 
 struct DeleteSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     let plugins: [Plugin]
     let hosts: [String]
     let onConfirm: () -> Void
@@ -11,14 +12,14 @@ struct DeleteSheet: View {
     @State private var stage = 1
     @State private var acknowledged = false
     @State private var confirmation = ""
-    private var phrase: String { "删除 \(plugins.count) 项" }
+    private var phrase: String { L("删除 \(plugins.count) 项") }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 14) {
                 Image(systemName: "trash.circle.fill").font(.system(size: 40)).foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(stage == 1 ? "核对将要移除的插件" : "最后确认这次删除").font(.title2.weight(.semibold))
-                    Text("第 \(stage) 步，共 2 步 · \(plugins.count) 项 · \(byteString(plugins.reduce(0) { $0 + $1.bytes }))").foregroundStyle(.secondary).font(.callout)
+                    Text(stage == 1 ? L("核对将要移除的插件") : L("最后确认这次删除")).font(.title2.weight(.semibold))
+                    Text(L("第 \(stage) 步，共 2 步 · \(plugins.count) 项 · \(byteString(plugins.reduce(0) { $0 + $1.bytes }))")).foregroundStyle(.secondary).font(.callout)
                 }
             }
             VStack(alignment: .leading, spacing: 13) {
@@ -30,10 +31,10 @@ struct DeleteSheet: View {
                                     HStack { Text(plugin.name).fontWeight(.medium); Spacer(); Text(plugin.format.rawValue).foregroundStyle(.secondary) }
                                     Text(plugin.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                                     if let components = plugin.classification?.components, components.count > 1 {
-                                        Text("整个文件包将一起移除，包含 \(components.count) 个组件：")
+                                        Text(L("整个文件包将一起移除，包含 \(components.count) 个组件："))
                                             .font(.caption.weight(.medium)).foregroundStyle(.orange)
                                         ForEach(Array(components.enumerated()), id: \.offset) { _, component in
-                                            Text(component.name + " · " + component.categories.map(\.rawValue).joined(separator: "、"))
+                                            Text(component.name + " · " + component.categories.map(\.displayName).joined(separator: L10n.listSeparator))
                                                 .font(.caption).foregroundStyle(.secondary)
                                         }
                                     }
@@ -42,27 +43,27 @@ struct DeleteSheet: View {
                             }
                         }
                     }.frame(height: 210).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-                    Text("按整个插件文件包移除；包内所有组件都会一起移除，未识别的组件也包括在内。预设、授权、外置音色库与宿主工程保留。依赖这些插件的工程可能无法正常播放。")
+                    Text(L("按整个插件文件包移除；包内所有组件都会一起移除，未识别的组件也包括在内。预设、授权、外置音色库与宿主工程保留。依赖这些插件的工程可能无法正常播放。"))
                         .font(.callout).foregroundStyle(.secondary)
                 } else {
-                    Label("移到废纸篓后，原目录中的插件将不可用。", systemImage: "exclamationmark.triangle").font(.headline)
-                    Text("插件将进入系统废纸篓。自动清理取决于 Finder 的“30 天后移除废纸篓中的项目”设置；手动清空废纸篓会提前永久删除。")
+                    Label(L("移到废纸篓后，原目录中的插件将不可用。"), systemImage: "exclamationmark.triangle").font(.headline)
+                    Text(L("插件将进入系统废纸篓。自动清理取决于 Finder 的“30 天后移除废纸篓中的项目”设置；手动清空废纸篓会提前永久删除。"))
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
-                    Text("请输入“\(phrase)”确认数量：").font(.callout)
-                    TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel("删除确认文字")
-                    Toggle("我已核对清单，并理解清空废纸篓后无法还原", isOn: $acknowledged).toggleStyle(.checkbox)
+                    Text(L("请输入“\(phrase)”确认数量：")).font(.callout)
+                    TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel(L("删除确认文字"))
+                    Toggle(L("我已核对清单，并理解清空废纸篓后无法还原"), isOn: $acknowledged).toggleStyle(.checkbox)
                 }
             }.id(stage).transition(.opacity)
-            if !hosts.isEmpty { Label("检测到正在运行：\(hosts.joined(separator: "、"))。请先保存工程并退出宿主。", systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange) }
+            if !hosts.isEmpty { Label(L("检测到正在运行：\(hosts.joined(separator: L10n.listSeparator))。请先保存工程并退出宿主。"), systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange) }
             Divider()
             HStack {
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("取消"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 if stage == 1 {
-                    Button("继续核对") { advance() }.buttonStyle(.borderedProminent)
+                    Button(L("继续核对")) { advance() }.buttonStyle(.borderedProminent)
                 } else {
-                    Button("返回清单") { stage = 1; acknowledged = false; confirmation = "" }
-                    Button("移到废纸篓", role: .destructive) { onConfirm() }
+                    Button(L("返回清单")) { stage = 1; acknowledged = false; confirmation = "" }
+                    Button(L("移到废纸篓"), role: .destructive) { onConfirm() }
                         .disabled(confirmation != phrase || !acknowledged)
                 }
             }
@@ -77,13 +78,14 @@ struct DeleteSheet: View {
 }
 
 struct RestoreSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     let manifest: BackupManifest
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label("从备份恢复插件", systemImage: "archivebox").font(.title2.weight(.semibold))
-            Text("已验证 \(manifest.entries.count) 项插件 · 备份于 \(manifest.createdAt.formatted(date: .abbreviated, time: .shortened))").font(.callout).foregroundStyle(.secondary)
+            Label(L("从备份恢复插件"), systemImage: "archivebox").font(.title2.weight(.semibold))
+            Text(L("已验证 \(manifest.entries.count) 项插件 · 备份于 \(manifest.createdAt.appFormatted(date: .abbreviated, time: .shortened))")).font(.callout).foregroundStyle(.secondary)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     ForEach(manifest.entries) { entry in
@@ -94,26 +96,28 @@ struct RestoreSheet: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
             }.frame(height: 230).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-            Text("将恢复到以上原始位置。同名插件会跳过；恢复不会覆盖现有文件。若目录无写入权限，结果中会列出具体项目。恢复完成后请重新启动宿主扫描插件。")
+            Text(L("将恢复到以上原始位置。同名插件会跳过；恢复不会覆盖现有文件。若目录无写入权限，结果中会列出具体项目。恢复完成后请重新启动宿主扫描插件。"))
                 .font(.callout).foregroundStyle(.secondary)
-            HStack { Spacer(); Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction); Button("恢复到原位置", action: onConfirm).buttonStyle(.borderedProminent) }
+            HStack { Spacer(); Button(L("取消"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction); Button(L("恢复到原位置"), action: onConfirm).buttonStyle(.borderedProminent) }
         }.padding(28).frame(width: 570)
     }
 }
 
 struct MessageSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     let message: String
     let onDismiss: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Label("PluginShelf", systemImage: "info.circle").font(.title2.weight(.semibold))
-            ScrollView { Text(message).font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 330)
-            HStack { Spacer(); Button("好", action: onDismiss).keyboardShortcut(.defaultAction) }
+            ScrollView { Text(L10n.rendered(message)).font(.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 330)
+            HStack { Spacer(); Button(L("好"), action: onDismiss).keyboardShortcut(.defaultAction) }
         }.padding(28).frame(width: 550)
     }
 }
 
 struct CustomDaysSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     @Binding var value: Int
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
@@ -123,16 +127,16 @@ struct CustomDaysSheet: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("自定义添加时间").font(.title2.weight(.semibold))
+            Text(L("自定义添加时间")).font(.title2.weight(.semibold))
             HStack {
-                Text("最近")
-                TextField("天数", text: $draft).textFieldStyle(.roundedBorder).frame(width: 85).accessibilityLabel("最近天数")
-                Text("天内添加的插件")
+                Text(L("最近"))
+                TextField(L("天数"), text: $draft).textFieldStyle(.roundedBorder).frame(width: 85).accessibilityLabel(L("最近天数"))
+                Text(L("天内添加的插件"))
             }
             HStack {
                 Spacer()
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("应用") {
+                Button(L("取消"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("应用")) {
                     if let days = validDays { value = days; dismiss() }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(validDays == nil)
             }
@@ -142,29 +146,30 @@ struct CustomDaysSheet: View {
 }
 
 struct ClassificationSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     let plugins: [Plugin]
     let onSave: ([PluginCategory]?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var categories = Set<PluginCategory>()
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("设置分类").font(.title2.weight(.semibold))
-            Text(plugins.count == 1 ? plugins[0].name : "所选 \(plugins.count) 项插件")
+            Text(L("设置分类")).font(.title2.weight(.semibold))
+            Text(plugins.count == 1 ? plugins[0].name : L("所选 \(plugins.count) 项插件"))
                 .font(.callout).foregroundStyle(.secondary).lineLimit(2)
-            Text("可以选择多个分类。设置作用于整个插件文件包，不修改插件文件。").font(.callout)
+            Text(L("可以选择多个分类。设置作用于整个插件文件包，不修改插件文件。")).font(.callout)
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(PluginCategory.allCases.filter { $0 != .unknown }) { category in
-                    Toggle(category.rawValue, isOn: Binding(get: { categories.contains(category) }, set: { enabled in
+                    Toggle(category.displayName, isOn: Binding(get: { categories.contains(category) }, set: { enabled in
                         if enabled { categories.insert(category) } else { categories.remove(category) }
                     })).toggleStyle(.checkbox)
                 }
             }
             Divider()
             HStack {
-                Button("恢复自动识别") { onSave(nil) }
+                Button(L("恢复自动识别")) { onSave(nil) }
                 Spacer()
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("保存") { onSave(PluginCategory.normalized(Array(categories))) }
+                Button(L("取消"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("保存")) { onSave(PluginCategory.normalized(Array(categories))) }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(categories.isEmpty)
             }
         }.padding(26).frame(width: 460)
@@ -176,18 +181,19 @@ struct ClassificationSheet: View {
 }
 
 struct PermanentDeleteSheet: View {
+    @Environment(\.locale) private var interfaceLocale
     let records: [RecoveryRecord]
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var stage = 1
     @State private var confirmation = ""
     @State private var acknowledged = false
-    private var phrase: String { "永久删除 \(records.count) 项" }
+    private var phrase: String { L("永久删除 \(records.count) 项") }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label(stage == 1 ? "核对永久删除清单" : "最后确认永久删除", systemImage: "trash.slash")
+            Label(stage == 1 ? L("核对永久删除清单") : L("最后确认永久删除"), systemImage: "trash.slash")
                 .font(.title2.weight(.semibold)).foregroundStyle(.red)
-            Text("第 \(stage) 步，共 2 步 · \(records.count) 项")
+            Text(L("第 \(stage) 步，共 2 步 · \(records.count) 项"))
             if stage == 1 {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -200,18 +206,18 @@ struct PermanentDeleteSheet: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.frame(height: 200)
             } else {
-                Text("所选插件文件将彻底删除，无法再从废纸篓还原。")
-                TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel("永久删除确认文字")
-                Toggle("我已核对清单，确认永久删除", isOn: $acknowledged).toggleStyle(.checkbox)
+                Text(L("所选插件文件将彻底删除，无法再从废纸篓还原。"))
+                TextField(phrase, text: $confirmation).textFieldStyle(.roundedBorder).accessibilityLabel(L("永久删除确认文字"))
+                Toggle(L("我已核对清单，确认永久删除"), isOn: $acknowledged).toggleStyle(.checkbox)
             }
             Divider()
             HStack {
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L("取消"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
-                if stage == 1 { Button("继续核对") { stage = 2 }.buttonStyle(.borderedProminent) }
+                if stage == 1 { Button(L("继续核对")) { stage = 2 }.buttonStyle(.borderedProminent) }
                 else {
-                    Button("返回清单") { stage = 1; confirmation = ""; acknowledged = false }
-                    Button("永久删除", role: .destructive, action: onConfirm)
+                    Button(L("返回清单")) { stage = 1; confirmation = ""; acknowledged = false }
+                    Button(L("永久删除"), role: .destructive, action: onConfirm)
                         .disabled(confirmation != phrase || !acknowledged)
                 }
             }

@@ -9,7 +9,7 @@ public enum FileSafety {
     }
     public static func safeRelative(_ path: String) throws {
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\0"), !path.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0 == ".." || $0 == "." || $0.isEmpty }) else {
-            throw ShelfError.invalid("备份中包含不安全的相对路径。")
+            throw ShelfError.invalid(L("备份中包含不安全的相对路径。"))
         }
     }
     public static func child(_ relative: String, of root: URL) throws -> URL {
@@ -20,31 +20,31 @@ public enum FileSafety {
         for part in relative.split(separator: "/") {
             cursor.appendPathComponent(String(part))
             if (try? FileManager.default.destinationOfSymbolicLink(atPath: cursor.path)) != nil {
-                throw ShelfError.invalid("目标路径包含符号链接：\(relative)")
+                throw ShelfError.invalid(L("目标路径包含符号链接：\(relative)"))
             }
         }
         let url = root.appendingPathComponent(relative).standardizedFileURL
         guard contained(url, in: root), contained(url.resolvingSymlinksInPath(), in: root.resolvingSymlinksInPath()) else {
-            throw ShelfError.invalid("路径越过了允许的目录：\(relative)")
+            throw ShelfError.invalid(L("路径越过了允许的目录：\(relative)"))
         }
         return url
     }
     public static func relative(_ url: URL, to root: URL) throws -> String {
-        guard contained(url, in: root) else { throw ShelfError.invalid("插件不在已登记的扫描目录内。") }
+        guard contained(url, in: root) else { throw ShelfError.invalid(L("插件不在已登记的扫描目录内。")) }
         let value = String(url.path.dropFirst(root.path.count + 1))
         try safeRelative(value)
         return value
     }
     public static func validatePlugin(_ plugin: Plugin, roots: [ScanRoot]) throws {
         guard plugin.canManage, let root = roots.first(where: { $0.path == plugin.root.path && !$0.protected }), PluginFormat.detect(plugin.url) == plugin.format else {
-            throw ShelfError.invalid("此项目受保护或不属于已登记的插件目录。")
+            throw ShelfError.invalid(L("此项目受保护或不属于已登记的插件目录。"))
         }
-        guard root.url.resolvingSymlinksInPath().path == root.path else { throw ShelfError.invalid("扫描目录已被替换为链接，请重新登记该目录。") }
+        guard root.url.resolvingSymlinksInPath().path == root.path else { throw ShelfError.invalid(L("扫描目录已被替换为链接，请重新登记该目录。")) }
         let relativePath = try relative(plugin.url, to: root.url)
         let destination = try child(relativePath, of: root.url)
         let values = try destination.resourceValues(forKeys: [.isSymbolicLinkKey])
-        guard values.isSymbolicLink != true else { throw ShelfError.invalid("符号链接插件仅供查看，请管理其真实安装位置。") }
-        guard !destination.resolvingSymlinksInPath().path.hasPrefix("/System/") else { throw ShelfError.invalid("系统组件受保护。") }
+        guard values.isSymbolicLink != true else { throw ShelfError.invalid(L("符号链接插件仅供查看，请管理其真实安装位置。")) }
+        guard !destination.resolvingSymlinksInPath().path.hasPrefix("/System/") else { throw ShelfError.invalid(L("系统组件受保护。")) }
     }
     public static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; encoder.dateEncodingStrategy = .iso8601
@@ -65,7 +65,7 @@ public enum FileSafety {
             if values.isSymbolicLink == true {
                 let target = try fm.destinationOfSymbolicLink(atPath: item.path)
                 guard !target.hasPrefix("/"), FileSafety.contained(item.resolvingSymlinksInPath(), in: url) else {
-                    throw ShelfError.invalid("插件包含指向外部的链接，无法完整备份：\(relative)")
+                    throw ShelfError.invalid(L("插件包含指向外部的链接，无法完整备份：\(relative)"))
                 }
                 update("link"); update(target)
             } else if values.isDirectory == true {
@@ -79,7 +79,7 @@ public enum FileSafety {
                 let handle = try FileHandle(forReadingFrom: item)
                 defer { try? handle.close() }
                 while let data = try handle.read(upToCount: 1024 * 1024), !data.isEmpty { hash.update(data: data) }
-            } else { throw ShelfError.invalid("不支持的文件类型：\(item.lastPathComponent)") }
+            } else { throw ShelfError.invalid(L("不支持的文件类型：\(item.lastPathComponent)")) }
         }
         try visit(url, relative: "payload")
         return hash.finalize().map { String(format: "%02x", $0) }.joined()

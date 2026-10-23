@@ -15,3 +15,7 @@ macOS 14 或更新版本 · Apple 芯片 / Intel
 旧版废纸篓项目仍可还原或手动永久删除，不再自动到期清理。
 
 备份不包含独立音色库和许可证。本安装包使用本地签名，尚未 Apple 公证。
+
+官方下载：https://github.com/xincheng1237/PluginShelf/releases/latest
+若 macOS 阻止打开，请先确认来自官方仓库，再到“系统设置 → 隐私与安全性”使用针对该应用的“仍要打开”。不要全局关闭 Gatekeeper。
+检查更新：PluginShelf 应用菜单，或“设置 → 通用 → 检查更新”。下载后校验安装包，再退出旧版并拖动替换。
