@@ -18,7 +18,6 @@ swiftc "$project_root/Packaging/DmgBackground.swift" -o "$design_work/render-bac
 swiftc "$project_root/Packaging/DmgBookmark.swift" -o "$design_work/encode-bookmark"
 "$design_work/render-background" "$design_work/background.tiff"
 mkdir -p "$(dirname "$dmg_output")"
-cp "$project_root/Packaging/INSTALL_README.txt" "$(dirname "$dmg_output")/PluginShelf-$version-安装说明.txt"
 python3 -m dmgbuild -s "$project_root/Packaging/dmg-settings.py" \
     -D "app=$app_input" -D "background=$design_work/background.tiff" -D "bookmark_encoder=$design_work/encode-bookmark" \
     "安装 PluginShelf" "$dmg_output"

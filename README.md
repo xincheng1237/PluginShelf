@@ -83,6 +83,6 @@ swift test
 
 只安装 Command Line Tools 也能构建。构建脚本分别生成 arm64/x86_64 再合并，使用本地 ad-hoc 签名。`BUILD_DIR` 和 `APP_OUTPUT` 可指定输出目录。
 
-DMG 额外使用构建工具 `dmgbuild==1.6.5`：`python3 -m pip install --target work/dmg-design/tools dmgbuild==1.6.5`。它只负责磁盘映像和 Finder 布局，不随应用交付。`Packaging/dmg.sh` 生成带 1×/2× 原生字体背景的拖拽安装界面，安装说明 TXT 单独输出；`DMG_OUTPUT` 可指定镜像路径。
+DMG 额外使用构建工具 `dmgbuild==1.6.5`：`python3 -m pip install --target work/dmg-design/tools dmgbuild==1.6.5`。它只负责磁盘映像和 Finder 布局，不随应用交付。`Packaging/dmg.sh` 生成带 1×/2× 原生字体背景的拖拽安装界面及 SHA-256 校验文件；`DMG_OUTPUT` 可指定镜像路径。
 
 设计与动画遵循本次应用的 `emil-design-eng`、`animate` Skill。详见 `docs/DESIGN_REVIEW.md`；验证范围详见 `docs/VERIFICATION.md`。
