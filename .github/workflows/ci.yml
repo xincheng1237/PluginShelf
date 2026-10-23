@@ -24,4 +24,4 @@ jobs:
       - name: Validate bundle
         run: |
           codesign --verify --strict outputs/PluginShelf.app
-          lipo -verify_arch arm64 x86_64 outputs/PluginShelf.app/Contents/MacOS/PluginShelf
+          lipo outputs/PluginShelf.app/Contents/MacOS/PluginShelf -verify_arch arm64 x86_64
