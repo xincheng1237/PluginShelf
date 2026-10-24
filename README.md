@@ -1,8 +1,10 @@
+<img src="docs/images/app-icon.png" width="88" height="88" alt="PluginShelf">
+
 # PluginShelf · 插件架
 
 原生 macOS 音频插件管理工具。快速找到插件，批量备份、恢复和整理，让插件资料库保持清楚、有序。
 
-[下载 1.1](https://github.com/xincheng1237/PluginShelf/releases/latest) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [反馈问题](https://github.com/xincheng1237/PluginShelf/issues)
+[下载 1.1（构建 15）](https://github.com/xincheng1237/PluginShelf/releases/latest) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [反馈问题](https://github.com/xincheng1237/PluginShelf/issues)
 
 ![PluginShelf 插件资料库](docs/screenshots/01-插件管理与时间筛选.png)
 
@@ -23,6 +25,8 @@
 3. 从“应用程序”打开 PluginShelf，扫描本机插件。
 
 当前发行包采用 ad-hoc 签名，尚未 Apple 公证。[安装说明](docs/INSTALL_README.txt)提供首次打开与升级说明。
+
+已安装旧构建的 1.1 用户，请从发行页手动下载并替换。旧更新器只比较版本号，不会提示同版本的更高构建。
 
 ## 备份与删除须知
 

@@ -63,7 +63,6 @@
   "同产品、同版本 {0}；依据：{1}": "Same product and version {0}; evidence: {1}",
   "名称 A–Z": "Name A–Z",
   "名称 Z–A": "Name Z–A",
-  "启动时每 24 小时最多检查一次；仅在发现更新时提示，不会自动安装。": "Checks at launch, at most once every 24 hours. You’ll only be notified when an update is available; installation is never automatic.",
   "启动时自动扫描；启用后每 5 分钟重新扫描。不会加载或运行插件代码。": "Scans at launch and every 5 minutes when enabled. Plug-in code is never loaded or run.",
   "在 Finder 中显示": "Show in Finder",
   "备份不能保存在插件内部。": "A backup cannot be saved inside a plug-in.",

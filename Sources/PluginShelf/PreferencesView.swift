@@ -23,8 +23,6 @@ struct PreferencesView: View {
                 Section {
                     LabeledContent(L("版本"), value: updater.currentVersion)
                     Toggle(L("自动检查更新"), isOn: $updater.automatic)
-                    Text(L("启动时每 24 小时最多检查一次；仅在发现更新时提示，不会自动安装。"))
-                        .font(.caption).foregroundStyle(.secondary)
                     HStack(spacing: 12) {
                         if updater.isWorking { ProgressView().controlSize(.small) }
                         Text(updater.statusText).font(.caption).foregroundStyle(.secondary)

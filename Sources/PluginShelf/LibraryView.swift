@@ -141,7 +141,13 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 9) {
                 Label(model.isDemo ? L("演示样本") : L("本机插件资料库"), systemImage: model.isDemo ? "testtube.2" : "internaldrive").font(.callout.weight(.medium))
                 Text(model.isDemo ? L("样本不含可执行插件") : L("\(model.plugins.count) 项 · \(byteString(model.totalBytes))")).font(.caption).foregroundStyle(.secondary)
-                SettingsLink { Label(L("设置"), systemImage: "gearshape") }.buttonStyle(.plain).font(.callout).padding(.top, 3)
+                SettingsLink {
+                    Label(L("设置"), systemImage: "gearshape")
+                        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).font(.callout).padding(.top, 3)
+                .accessibilityIdentifier("open-settings")
             }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
         }
     }

@@ -1,8 +1,10 @@
+<img src="docs/images/app-icon.png" width="88" height="88" alt="PluginShelf">
+
 # PluginShelf
 
 A native macOS audio plug-in manager. Find plug-ins quickly, back them up in batches, and restore or remove them from one place.
 
-[Download 1.1](https://github.com/xincheng1237/PluginShelf/releases/latest) · [简体中文](README.md) · [Release notes](CHANGELOG.en.md) · [Report an issue](https://github.com/xincheng1237/PluginShelf/issues)
+[Download 1.1 (build 15)](https://github.com/xincheng1237/PluginShelf/releases/latest) · [简体中文](README.md) · [Release notes](CHANGELOG.en.md) · [Report an issue](https://github.com/xincheng1237/PluginShelf/issues)
 
 ![PluginShelf plug-in library](docs/screenshots/01-插件管理与时间筛选.png)
 
@@ -23,6 +25,8 @@ Requires **macOS 14 or later**. One **Universal 2** download supports both **App
 3. Open PluginShelf from Applications to scan your plug-ins.
 
 The current release is ad-hoc signed and has not been notarized by Apple. See the [installation guide](docs/INSTALLATION.en.md) for first-launch and upgrade details.
+
+If you have an earlier build of 1.1, download and replace it manually from Releases. The existing updater compares version numbers and does not notify you about a higher build of the same version.
 
 ## Backups and deletion
 
