@@ -4,7 +4,7 @@
 
 原生 macOS 音频插件管理工具。快速找到插件，批量备份、恢复和整理，让插件资料库保持清楚、有序。
 
-[下载 1.1（构建 15）](https://github.com/xincheng1237/PluginShelf/releases/latest) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [反馈问题](https://github.com/xincheng1237/PluginShelf/issues)
+[下载 1.1（构建 18）](https://github.com/xincheng1237/PluginShelf/releases/latest) · [English](README.en.md) · [更新日志](CHANGELOG.md) · [反馈问题](https://github.com/xincheng1237/PluginShelf/issues)
 
 ![PluginShelf 插件资料库](docs/screenshots/01-插件管理与时间筛选.png)
 

@@ -137,18 +137,64 @@ struct LibraryView: View {
                     Label { HStack { Text(L("废纸篓")); Spacer(); Text("\(model.recovery.count)").foregroundStyle(.secondary).monospacedDigit() } } icon: { Image(systemName: "trash") }.tag("recovery")
                 }
             }
-            Divider()
-            VStack(alignment: .leading, spacing: 9) {
-                Label(model.isDemo ? L("演示样本") : L("本机插件资料库"), systemImage: model.isDemo ? "testtube.2" : "internaldrive").font(.callout.weight(.medium))
-                Text(model.isDemo ? L("样本不含可执行插件") : L("\(model.plugins.count) 项 · \(byteString(model.totalBytes))")).font(.caption).foregroundStyle(.secondary)
+            sidebarFooter
+        }
+    }
+    private var sidebarFooter: some View {
+        let title = model.isDemo ? L("演示样本") : L("本机插件资料库")
+        let compactTitle = model.isDemo ? title : L("本机插件")
+        let summary = model.isDemo ? L("样本不含可执行插件") : L("\(model.plugins.count) 项 · \(byteString(model.totalBytes))")
+        return VStack(spacing: 0) {
+            Divider().padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: model.isDemo ? "testtube.2" : "internaldrive")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 16)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ViewThatFits(in: .horizontal) {
+                            Text(title).fixedSize()
+                            Text(compactTitle).fixedSize()
+                        }
+                        .font(.callout.weight(.medium))
+                        if model.isDemo {
+                            Text(summary).font(.caption2).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            ViewThatFits(in: .horizontal) {
+                                Text(summary).fixedSize()
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L("\(model.plugins.count) 项"))
+                                    Text(byteString(model.totalBytes))
+                                }
+                            }
+                            .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 8)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityValue(summary)
                 SettingsLink {
-                    Label(L("设置"), systemImage: "gearshape")
-                        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                    HStack(spacing: 8) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14))
+                            .frame(width: 16)
+                        Text(L("设置")).font(.callout)
+                    }
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        .padding(.horizontal, 8)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).font(.callout).padding(.top, 3)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("open-settings")
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
         }
     }
     private func libraryHeader(compact: Bool) -> some View {
