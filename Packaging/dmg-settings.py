@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import plistlib
 from mac_alias import Bookmark
 
 
@@ -26,7 +27,11 @@ symlinks = {"应用程序": "/Applications"}
 # Finder already presents application bundles without the extension. Setting
 # its hidden-extension flag would add FinderInfo to the signed app bundle.
 hide_extensions = []
-icon = str(application / "Contents/Resources/AppIcon.icns")
+app_info = plistlib.loads((application / "Contents/Info.plist").read_bytes())
+icon_name = app_info.get("CFBundleIconFile", "AppIcon")
+if not icon_name.endswith(".icns"):
+    icon_name += ".icns"
+icon = str(application / "Contents/Resources" / icon_name)
 background = defines["background"]
 format = "UDZO"
 filesystem = "HFS+"

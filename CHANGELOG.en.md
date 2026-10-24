@@ -13,6 +13,12 @@
 
 - Changed Trash cleanup so newly deleted plug-ins follow the system’s automatic removal setting.
 - Improved Trash records and batch actions while retaining support for items deleted in the previous version.
+- Updated the app icon and Settings interface.
+
+### 🛠️ Fixes
+
+- Fixed clicks on parts of the Settings button not opening the window.
+- Fixed the old icon sometimes remaining visible after the app icon was updated.
 
 ## 1.0
 

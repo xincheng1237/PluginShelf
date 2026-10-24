@@ -1,23 +1,87 @@
 import AppKit
-let destination = CommandLine.arguments[1]
-let image = NSImage(size: NSSize(width: 1024, height: 1024))
-image.lockFocus()
-let bounds = NSRect(x: 58, y: 58, width: 908, height: 908)
-let path = NSBezierPath(roundedRect: bounds, xRadius: 205, yRadius: 205)
-NSColor(calibratedWhite: 0.06, alpha: 0.18).setFill()
-let shadow = NSShadow(); shadow.shadowColor = .black.withAlphaComponent(0.22); shadow.shadowOffset = NSSize(width: 0, height: -15); shadow.shadowBlurRadius = 32
-shadow.set(); path.fill(); NSShadow().set()
-NSGradient(colors: [NSColor(calibratedRed: 0.32, green: 0.47, blue: 0.96, alpha: 1), NSColor(calibratedRed: 0.22, green: 0.27, blue: 0.68, alpha: 1)])!.draw(in: path, angle: -75)
-let shelf = NSBezierPath(roundedRect: NSRect(x: 235, y: 230, width: 554, height: 564), xRadius: 65, yRadius: 65)
-shelf.lineWidth = 19; NSColor.white.withAlphaComponent(0.9).setStroke(); shelf.stroke()
-for y in [375.0, 525.0, 675.0] {
-    let line = NSBezierPath(); line.move(to: NSPoint(x: 275, y: y)); line.line(to: NSPoint(x: 749, y: y)); line.lineWidth = 12; NSColor.white.withAlphaComponent(0.35).setStroke(); line.stroke()
+
+// Native tile composition in a 1024-point space with a generated library foreground.
+// Usage: render-icon <destination.png> <pixel-size> <foreground.png>
+guard CommandLine.arguments.count == 4 else {
+    FileHandle.standardError.write(Data("Usage: render-icon <destination.png> <pixel-size> <foreground.png>\n".utf8))
+    exit(2)
 }
-let waveform = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)!.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 240, weight: .medium))!
-let white = NSImage(size: waveform.size); white.lockFocus(); NSColor.white.set(); NSRect(origin: .zero, size: white.size).fill(); waveform.draw(at: .zero, from: .zero, operation: .destinationIn, fraction: 1); white.unlockFocus()
-NSColor(calibratedRed: 0.25, green: 0.36, blue: 0.82, alpha: 1).setFill()
-NSBezierPath(roundedRect: NSRect(x: 315, y: 355, width: 394, height: 290), xRadius: 45, yRadius: 45).fill()
-white.draw(in: NSRect(x: 355, y: 390, width: 314, height: 220))
-image.unlockFocus()
-let rep = NSBitmapImageRep(data: image.tiffRepresentation!)!
-try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: destination))
+let pixels = Int(CommandLine.arguments[2]) ?? 1024
+guard (16...4096).contains(pixels),
+      let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+                                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                    isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+      let graphics = NSGraphicsContext(bitmapImageRep: bitmap) else {
+    fatalError("Unable to create icon bitmap")
+}
+NSGraphicsContext.saveGraphicsState()
+NSGraphicsContext.current = graphics
+let context = graphics.cgContext
+context.clear(CGRect(x: 0, y: 0, width: pixels, height: pixels))
+context.scaleBy(x: CGFloat(pixels) / 1024, y: CGFloat(pixels) / 1024)
+context.setShouldAntialias(true)
+
+func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
+    NSColor(srgbRed: CGFloat((hex >> 16) & 255) / 255,
+            green: CGFloat((hex >> 8) & 255) / 255,
+            blue: CGFloat(hex & 255) / 255, alpha: alpha)
+}
+func rounded(_ rect: NSRect, _ radius: CGFloat) -> NSBezierPath {
+    NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+}
+func gradient(_ path: NSBezierPath, _ colors: [NSColor], angle: CGFloat = -90) {
+    // Every call uses a fixed, nonempty palette.
+    NSGradient(colors: colors)!.draw(in: path, angle: angle)
+}
+func stroke(_ path: NSBezierPath, _ tint: NSColor, _ width: CGFloat) {
+    path.lineWidth = width
+    tint.setStroke()
+    path.stroke()
+}
+func shadowed(tint: NSColor, blur: CGFloat, offset: NSSize, draw: () -> Void) {
+    NSGraphicsContext.saveGraphicsState()
+    let shadow = NSShadow()
+    shadow.shadowColor = tint
+    // NSShadow uses device-space lengths; scale these alongside the artwork.
+    let scale = CGFloat(pixels) / 1024
+    shadow.shadowBlurRadius = blur * scale
+    shadow.shadowOffset = NSSize(width: offset.width * scale, height: offset.height * scale)
+    shadow.set()
+    draw()
+    NSGraphicsContext.restoreGraphicsState()
+}
+
+// 82.8% base width: the previous 88.7% dominated neighbouring icons.
+let base = rounded(NSRect(x: 88, y: 88, width: 848, height: 848), 190)
+shadowed(tint: color(0x071C49, 0.23), blur: 17, offset: NSSize(width: 0, height: -9)) {
+    color(0x0877EE).setFill()
+    base.fill()
+}
+gradient(base, [color(0x39C8E7), color(0x149CF5), color(0x0753E9)], angle: -83)
+NSGraphicsContext.saveGraphicsState()
+base.addClip()
+NSGradient(starting: color(0xCAFFFF, 0.20), ending: color(0x70F3FF, 0))!
+    .draw(fromCenter: NSPoint(x: 280, y: 890), radius: 0,
+          toCenter: NSPoint(x: 280, y: 890), radius: 850,
+          options: [.drawsBeforeStartingLocation, .drawsAfterEndingLocation])
+NSGraphicsContext.restoreGraphicsState()
+if pixels >= 64 {
+    stroke(rounded(NSRect(x: 89.5, y: 89.5, width: 845, height: 845), 188.5), color(0xD9FFFF, 0.34), 2)
+}
+
+// A separate foreground: varied audio plug-in books held together on one shelf.
+// The existing tile geometry and artwork placement remain deterministic.
+guard let artwork = NSImage(contentsOfFile: CommandLine.arguments[3]) else {
+    FileHandle.standardError.write(Data("Unable to load library artwork.\n".utf8))
+    exit(3)
+}
+graphics.imageInterpolation = .high
+artwork.draw(in: NSRect(x: 112, y: 112, width: 800, height: 800),
+          from: NSRect(origin: .zero, size: artwork.size), operation: .sourceOver, fraction: 1)
+
+NSGraphicsContext.restoreGraphicsState()
+let export = bitmap.converting(to: .sRGB, renderingIntent: .default) ?? bitmap
+guard let png = export.representation(using: .png, properties: [:]) else {
+    fatalError("Unable to encode icon PNG")
+}
+try png.write(to: URL(fileURLWithPath: CommandLine.arguments[1]), options: .atomic)
