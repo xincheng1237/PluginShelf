@@ -4,7 +4,7 @@
 
 A native macOS audio plug-in manager. Find plug-ins quickly, back them up in batches, and restore or remove them from one place.
 
-[Download 1.1 (build 15)](https://github.com/xincheng1237/PluginShelf/releases/latest) · [简体中文](README.md) · [Release notes](CHANGELOG.en.md) · [Report an issue](https://github.com/xincheng1237/PluginShelf/issues)
+[Download 1.1 (build 18)](https://github.com/xincheng1237/PluginShelf/releases/latest) · [简体中文](README.md) · [Release notes](CHANGELOG.en.md) · [Report an issue](https://github.com/xincheng1237/PluginShelf/issues)
 
 ![PluginShelf plug-in library](docs/screenshots/01-插件管理与时间筛选.png)
 

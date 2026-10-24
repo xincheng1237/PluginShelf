@@ -39,7 +39,7 @@ struct PreferencesView: View {
                     }
                 } header: { Label(L("软件更新"), systemImage: "arrow.down.circle") }
                 Section {
-                    Text(L("新删除的插件会进入系统废纸篓，不安装后台清理程序。"))
+                    Text(L("新删除的插件会进入系统废纸篓。"))
                     Text(L("如需自动清理，请在 Finder → 设置 → 高级中勾选“30 天后移除废纸篓中的项目”。此设置影响整个系统废纸篓；手动清空会提前永久删除。"))
                         .font(.caption).foregroundStyle(.secondary)
                     Button(L("打开系统废纸篓"), action: model.openSystemTrash)
@@ -49,7 +49,7 @@ struct PreferencesView: View {
             Form {
                 Section {
                     Toggle(L("自动刷新插件资料库"), isOn: $model.autoRefresh)
-                    Text(L("启动时自动扫描；启用后每 5 分钟重新扫描。不会加载或运行插件代码。"))
+                    Text(L("启动时自动扫描；启用后每 5 分钟重新扫描。"))
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(model.customRoots) { root in
                         HStack {
@@ -60,9 +60,7 @@ struct PreferencesView: View {
                         }
                     }
                     Button(L("添加自定义插件目录…"), action: model.addRoot)
-                    Text(L("自动扫描用户及共享资源库的 AU、VST2、VST3、AAX、CLAP、LV2、RTAS 目录，并查看应用内 AUv3。非标准目录可手动添加。宿主内置效果、部分脚本格式与云端插件不在首版管理范围。"))
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(L("本版本不申请管理员权限。受保护目录中的项目可查看；写入、移动受系统权限约束，失败时保留源文件并显示结果。"))
+                    Text(L("自动扫描用户及共享资源库的 AU、VST2、VST3、AAX、CLAP、LV2、RTAS 目录，并查看应用内 AUv3。非标准目录可手动添加。宿主内置效果、部分脚本格式与云端插件不在管理范围。"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)
